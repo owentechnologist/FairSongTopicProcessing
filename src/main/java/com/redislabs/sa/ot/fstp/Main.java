@@ -27,11 +27,11 @@ import com.redislabs.sa.ot.util.*;
  * Example:  mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.c309.FIXME.cloud.redisFIXME.com --port 12144 --password FIXME <required-args>"
 
  * Example with all required args publishing only new Song entries:
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-12144.c309.us-east-2-1.ec2.cloud.redislabs.com --port 12144 --password WqedzS2orEF4Dh0baBeaRqo16DrYYxzI --eventcount 1500 --publishnew true --converttofair false --convertcount 0 --audittopics false"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-10900.re-cluster1.ps-redislabs.org --port 10900 --eventcount 1500 --publishnew true --converttofair false --convertcount 0 --audittopics false"
 
  * Example with all required args converting Song entries to FairEntries:
 
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-12144.c309.us-east-2-1.ec2.cloud.redislabs.com --port 12144 --password WqedzS2orEF4Dh0baBeaRqo16DrYYxzI --eventcount 1500 --publishnew false --converttofair true --convertcount 10 --audittopics false"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-10900.re-cluster1.ps-redislabs.org --port 10900 --eventcount 1500 --publishnew false --converttofair true --convertcount 10 --audittopics false"
 
  * It is expected that the Search module is enabled and this index has been created...
  * Execute the following from redis-cli / redisInsight if not:

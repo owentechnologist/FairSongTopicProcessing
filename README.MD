@@ -71,3 +71,11 @@ mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redi
 ```
 FT.CREATE idx_songs prefix 1 song SCHEMA singer TAG SORTABLE album TAG SORTABLE isTombstoned TAG isQueued TAG isThrottled TAG TimeOfArrival NUMERIC SORTABLE
 ```
+
+Note that to build this project you need to add the necessary jar to your local mvn repo:
+
+This will not be necessary once this libray is available publicly through mvn 
+
+``` 
+mvn org.apache.maven.plugins:maven-install-plugin:2.5.2:install-file -Dfile=redis-streams-java-0.3.1.2.jar
+```
