@@ -52,25 +52,35 @@ public class JedisPooledHelper {
         String password = "";
         JedisConnectionHelperSettings settings = new JedisConnectionHelperSettings();
 
+        settings.setTestOnBorrow(true);
+        settings.setConnectionTimeoutMillis(120000);
+        settings.setNumberOfMinutesForWaitDuration(1);
+        settings.setNumTestsPerEvictionRun(10);
+        settings.setPoolMaxIdle(1); //this means less stale connections
+        settings.setPoolMinIdle(0);
+        settings.setRequestTimeoutMillis(12000);
+        settings.setTestOnReturn(false); // if idle, they will be mostly removed anyway
+        settings.setTestOnCreate(true);
+
         ArrayList<String> argList = new ArrayList<>(Arrays.asList(args));
         if (argList.contains("--host")) {
-            int hostIndex = argList.indexOf("--host");
-            host = argList.get(hostIndex + 1);
+            int argIndex = argList.indexOf("--host");
+            host = argList.get(argIndex + 1);
             settings.setRedisHost(host);
         }
         if (argList.contains("--port")) {
-            int portIndex = argList.indexOf("--port");
-            port = Integer.parseInt(argList.get(portIndex + 1));
+            int argIndex = argList.indexOf("--port");
+            port = Integer.parseInt(argList.get(argIndex + 1));
             settings.setRedisPort(port);
         }
         if (argList.contains("--user")) {
-            int userNameIndex = argList.indexOf("--user");
-            username = argList.get(userNameIndex + 1);
+            int argIndex = argList.indexOf("--user");
+            username = argList.get(argIndex + 1);
             settings.setUserName(username);
         }
         if (argList.contains("--password")) {
-            int passwordIndex = argList.indexOf("--password");
-            password = argList.get(passwordIndex + 1);
+            int argIndex = argList.indexOf("--password");
+            password = argList.get(argIndex + 1);
             settings.setPassword(password);
             settings.setUsePassword(true);
         }
@@ -104,15 +114,10 @@ public class JedisPooledHelper {
             System.out.println("loading custom --usercertpass == " + userCertPassword);
             settings.setUserCertPassword(userCertPassword);
         }
-        settings.setTestOnBorrow(true);
-        settings.setConnectionTimeoutMillis(120000);
-        settings.setNumberOfMinutesForWaitDuration(1);
-        settings.setNumTestsPerEvictionRun(10);
-        settings.setPoolMaxIdle(1); //this means less stale connections
-        settings.setPoolMinIdle(0);
-        settings.setRequestTimeoutMillis(12000);
-        settings.setTestOnReturn(false); // if idle, they will be mostly removed anyway
-        settings.setTestOnCreate(true);
+        if (argList.contains("--maxconnections")) {
+            int argIndex = argList.indexOf("--maxconnections");
+            settings.setMaxConnections(Integer.parseInt(argList.get(argIndex + 1)));
+        }
 
         JedisConnectionHelper connectionHelper = null;
         try{

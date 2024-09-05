@@ -17,7 +17,13 @@ import com.redislabs.sa.ot.util.*;
 /**
  * This program showcases the use of the Jedis Streams client library
  * possible args:
- * --eventcount 100
+ * --publishnew   true/false should this program execution write new song entries?
+ * --eventcount 100  int how many events to process (including new entries or audited entries)
+ * --converttofair  true/false should this program execution populate the FairTopic with songs?
+ * --convertthreadnum  int how many threads to spin up that do the converting to FairTopic?
+ * --convertcount   int how many entries should each thread process before exiting?
+ * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer?
+ *
  * Example:  mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.c309.FIXME.cloud.redisFIXME.com --port 12144 --password FIXME <required-args>"
 
  * Example with all required args publishing only new Song entries:
@@ -42,7 +48,6 @@ public class Main {
     static String CF_INBOUND_TOPIC_KEY_NAME = "CF:" + INBOUND_TOPIC_NAME;
     static String CF_PROCESSING_TARGET_KEY_NAME = "CF:ProcessingTargetFilter";
     static String SEARCH_IDX = "idx_songs";
-    static long cfReserveSize = 10000000;//roughly 16 mb / key
     static ArrayList<String> argList = null;
 
     /**
@@ -73,7 +78,18 @@ public class Main {
 
         boolean convertToFair = Boolean.parseBoolean(getValueForArg("--converttofair"));
         if(convertToFair) {
-            convertInboundToFair(connection);
+            int howManyConvertEntryThreads = Integer.parseInt(getValueForArg("--convertthreadnum"));
+            for(int threads=0;threads<howManyConvertEntryThreads;threads++) {
+                FairSongProcessingTopicThread fsptt = new FairSongProcessingTopicThread().
+                        setNumberOfEntriesToConsume(Integer.parseInt(getValueForArg("--convertcount"))).
+                        setPooledJedis(connection).
+                        setInboundSongTopicName(INBOUND_TOPIC_NAME).
+                        setFairProcessingSongTopicName(READY_FOR_FAIR_PROCESSING_TOPIC_NAME).
+                        setInboundEntryDedupKeyName(CF_INBOUND_TOPIC_KEY_NAME).
+                        setFairProcessingEntryDedupKeyName(CF_PROCESSING_TARGET_KEY_NAME).
+                        setSearchIndexName(SEARCH_IDX);
+                new Thread(fsptt).start();
+            }
         }
 
         boolean auditTopics = Boolean.parseBoolean(getValueForArg("--audittopics"));
@@ -95,131 +111,6 @@ public class Main {
     }
 
     /**
-     * Use this method to convert the Inbound Songs to the Fair Topic
-     * This involves deduping the entries using a CuckooFilter and
-     * writing an enriched version of the entry as hash and
-     * querying the search index for the next fair entry
-     * (sorted by date ASC and !queued and grouped by album)
-     * Every 20th song will be set to throttled - just to prove that has an impact
-     * @param args
-     * @param connection
-     * @throws Throwable
-     */
-    public static void convertInboundToFair(JedisPooled connection)throws Throwable {
-        int convertTargetCount = Integer.parseInt(getValueForArg("--convertcount"));
-        String consumerGroupName = "groupA";
-        ConsumerGroup consumer = new ConsumerGroup(connection, INBOUND_TOPIC_NAME, consumerGroupName);
-        for (int x = 0; x < convertTargetCount; x++) {
-            TopicEntry consumedMessage = consumer.consume("songEventFairProcessor");
-            if(!(null==consumedMessage)) {
-                consumedMessage.getMessage().forEach(
-                        (key, value) -> System.out.println(key + ":" + value)
-                );
-                String dedupValue = consumedMessage.getMessage().get("singer");
-                dedupValue += "_" + consumedMessage.getMessage().get("album");
-                dedupValue += "_" + consumedMessage.getMessage().get("song");
-
-                boolean isDuplicate = true;
-                boolean shouldAck = false;
-
-                /*
-                //Dedup the selected keyName using CuckooFilter
-
-                if (!connection.exists(CF_INBOUND_TOPIC_KEY_NAME)) {
-                    connection.cfReserve(CF_INBOUND_TOPIC_KEY_NAME, cfReserveSize);
-                }
-                isNew = connection.cfAddNx(CF_INBOUND_TOPIC_KEY_NAME, dedupValue);
-                */
-
-                isDuplicate=SlidingWindowHelper.itemExistsWithinTimeWindow("Z:"+CF_INBOUND_TOPIC_KEY_NAME,dedupValue,connection,300);
-
-                System.out.println("isDuplicate ==" + isDuplicate);
-                //If not duplicate then isDuplicate == false:
-                if (!isDuplicate) {
-                    //write the message attributes to a Hash to be indexed by Search
-                    //use the eventID from the stream as the UID in the hash keyname:
-                    String uid = consumedMessage.getId().toString();
-                    System.out.println("EntryID = " + uid);
-                    String singer = consumedMessage.getMessage().get("singer");
-                    String album = consumedMessage.getMessage().get("album");
-                    String song = consumedMessage.getMessage().get("song");
-                    String lyrics = consumedMessage.getMessage().get("lyrics");
-                    String releaseDate = consumedMessage.getMessage().get("releaseDate");
-                    String timeOfArrival = uid.split("-")[0];
-                    String isTombstoned = "false";
-                    String isQueued = "false";
-                    String isThrottled = "false";
-                    if (x % 20 == 0) {
-                        isThrottled = "true";
-                    }
-                    Map map = Map.of("singer", singer, "album", album, "song", song, "releaseDate",
-                            releaseDate, "lyrics", lyrics, "TimeOfArrival", timeOfArrival,
-                            "isTombstoned", isTombstoned, "isQueued", isQueued, "isThrottled", isThrottled);
-                    connection.hset("song:" + uid, map);
-                    /**
-                     * Next section focuses on moving searched/sorted/filtered entries into the
-                     * FairTopic...
-                     */
-                    long retentionTimeSeconds = 86400 * 8;
-                    long maxStreamLength = 2500;
-                    long streamCycleSeconds = 86400; // Create a new stream after one day, regardless of the current stream's length
-                    SerialTopicConfig config2 = new SerialTopicConfig(
-                        READY_FOR_FAIR_PROCESSING_TOPIC_NAME,
-                        retentionTimeSeconds,
-                        maxStreamLength,
-                        streamCycleSeconds,
-                        SerialTopicConfig.TTLFuzzMode.RANDOM);
-                    TopicManager fairTopicManager = TopicManager.createTopic(connection, config2);
-                    TopicProducer fairProducer = new TopicProducer(connection, READY_FOR_FAIR_PROCESSING_TOPIC_NAME);
-                    //use search to find the fair SongEvent to Process Next
-                    SearchHelper searcher = new SearchHelper();
-                    boolean entityExists = true;
-                    String hashKeyNameToProcessNext = "";
-                    int retryCount = 10; //retry 10 times to allow time for new entries to arrive
-                    while ((entityExists) && (retryCount > 0)) {
-                        hashKeyNameToProcessNext = searcher.performSearchGetResultHashKey(connection, SEARCH_IDX, 1);
-                        /*
-                        //Dedup the song_album_singer using CuckooFilter
-                        if (!connection.exists(CF_PROCESSING_TARGET_KEY_NAME)) {
-                            connection.cfReserve(CF_PROCESSING_TARGET_KEY_NAME, cfReserveSize);
-                        }
-                        isNewTargetKey = connection.cfAddNx(CF_PROCESSING_TARGET_KEY_NAME, hashKeyNameToProcessNext);
-                        */
-                        //dedup the song_album_singer using SortedSet with 5 min window (300 seconds:
-                        entityExists=SlidingWindowHelper.itemExistsWithinTimeWindow("Z:"+CF_PROCESSING_TARGET_KEY_NAME,hashKeyNameToProcessNext,connection,300);
-                        System.out.println("Hmmm...  entityExists ==" + entityExists+ " "+hashKeyNameToProcessNext);
-                        retryCount--;
-                    }
-                    //Process the Song Event (not necessarily the latest one just received)
-                    //second topic is populated with fairly distributed events across all albums and singers
-                    String fairSingerName = connection.hget(hashKeyNameToProcessNext, "singer");
-                    if(null!=fairSingerName) {
-                        fairProducer.produce(Map.of("keyName", hashKeyNameToProcessNext, "singer", fairSingerName));
-
-                        //TimeSeriesEventLogger uses JedisPooledHelper to init JedisPooled connection when created:
-                        //To make logger more robust you can assign startUpArgs to the instance (not done in this example)
-                        TimeSeriesEventLogger logger = new TimeSeriesEventLogger().setSharedLabel("fair_events").
-                            setCustomLabel(fairSingerName).
-                            setTSKeyNameForMyLog("TS:" + fairSingerName).
-                            initTS();
-                        logger.addEventToMyTSKey(1.0d);
-                        connection.hset(hashKeyNameToProcessNext, "isQueued", "true");
-                        shouldAck = true;
-                    }
-                } else { // its a duplicate song for that artist and album!
-                    shouldAck = true;
-                }
-                if (shouldAck) {
-                    // To acknowledge a message, create an AckMessage:
-                    AckMessage ack = new AckMessage(consumedMessage);
-                    boolean success = consumer.acknowledge(ack);
-                    System.out.println("Inbound song to be processed Message Acknowledged... " + ack);
-                }
-            }// end of if(!null==consumedMessage)
-        }//end of convertTargetCount loop
-    }
-
-    /**
      * Use this method to publish new songs to the INBOUND Topic:
      * @param args
      * @param connection
@@ -237,12 +128,6 @@ public class Main {
                 SerialTopicConfig.TTLFuzzMode.RANDOM);
         TopicManager manager = TopicManager.createTopic(connection, config);
         int howManySongEvents = Integer.parseInt(getValueForArg("--eventcount"));
-        //ArrayList<String> argList = new ArrayList<>(Arrays.asList(args));
-        /**
-        if (argList.contains("--eventcount")) {
-            int argIndex = argList.indexOf("--eventcount");
-            howManySongEvents = Integer.parseInt(argList.get(argIndex + 1));
-        }*/
         TopicProducer producer = new TopicProducer(connection,INBOUND_TOPIC_NAME);
         NewSongEventWriter nsew = new NewSongEventWriter();
         for (int x = 0; x < howManySongEvents; x++) {

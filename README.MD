@@ -43,18 +43,27 @@ You can spin up a free redis database with these capabilities in the cloud here:
 This example includes a Java library that enables the Topic abstraction.
 
 * Execute the mvn command with necessary args to connect to your Redis instance
-
+``` 
+ * possible args:
+ * --publishnew   true/false should this program execution write new song entries?
+ * --eventcount 100  int how many events to process (including new entries or audited entries)
+ * --converttofair  true/false should this program execution populate the FairTopic with songs? 
+ * --convertthreadnum  int how many threads to spin up that do the converting to FairTopic?
+ * --convertcount   int how many entries should each thread process before exiting?
+ * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer? 
+ *
+```
 * Example with all required args publishing only new Song entries:
 ```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --eventcount 1500 --publishnew true --converttofair false --convertcount 0 --audittopics false"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --converttofair false --audittopics false --publishnew true --eventcount 1500"
 ```
 * Example with all required args converting Song entries to FairEntries:
 ```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --eventcount 1500 --publishnew false --converttofair true --convertcount 10 --audittopics false"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertcount 10 --convertthreadnum 10"
 ```
 * Example with all required args producing topK results from INBOUND and FAIR Topics:
 ```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --eventcount 1500 --publishnew false --converttofair false --convertcount 0 --audittopics true"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --publishnew false --converttofair false --audittopics true --eventcount 1500"
 ```
 
 * It is expected that the Search module is enabled and the following index has been created...

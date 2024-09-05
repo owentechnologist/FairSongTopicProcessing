@@ -25,16 +25,9 @@ public class SearchHelper{
         this.queryGuts="@isQueued:{false} @isThrottled:{false} @isTombstoned:{false}";
     }
     /**
-     *          ArrayList<String> groupByFields = new ArrayList<>();
-     *          groupByFields.add("@cost");
-     *          groupByFields.add("@location");
-     *          groupByFields.add("@event_name");
-     *          ArrayList<Reducer> reducerCollection = new ArrayList<>();
-     *          reducerCollection.add(Reducers.count().as("event_match_count"));
-     *          String queryGuts = "@event_name:Petting @cost:[1.00 +inf] " +
-     *                  "@location:Gorilla @location:East -@days:{Tue Wed Thu}";
-     *          AggregationBuilder builder = new AggregationBuilder(queryGuts)
-     *                  .groupBy(groupByFields,reducerCollection).filter("@cost <= 9").dialect(Main.dialectVersion);
+     * Searches for indexed Hash by various attributes
+     * The one that mostly matters is @isQueued - which indicates that Hash has already been added
+     * to the FairProcessingTopic and should not be included in search results
      */
     public String performSearchGetResultHashKey(JedisPooled connection,String idxName,int limitMax){
         long startTime=System.currentTimeMillis();
@@ -61,7 +54,7 @@ public class SearchHelper{
                         "\n");
             }
         }
-        String hashKeyName = "no result";
+        String hashKeyName = null;//"no result";
         if(!isArraylist) {
             hashKeyName = ar.getRow(0).getString("__key");
         }
