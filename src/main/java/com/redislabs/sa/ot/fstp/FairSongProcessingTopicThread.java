@@ -97,7 +97,6 @@ public class FairSongProcessingTopicThread extends Thread{
      * @throws Throwable
      */
     ConsumerGroup convertInboundToFair(int consumerIDSuffixForThread)throws Throwable {
-        //FIXME: consumed entries are not being Acknowledged!!!
         String consumerGroupName = "groupA";
         ConsumerGroup consumer = new ConsumerGroup(connection, INBOUND_TOPIC_NAME, consumerGroupName);
         //for (int x = 0; x < numberOfEntriesToConsume; x++) {
