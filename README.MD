@@ -53,13 +53,19 @@ This example includes a Java library that enables the Topic abstraction.
  * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer? 
  *
 ```
+
+It makes sense to execute the program multiple times - the logical path is to:
+1. Produce new songs
+2. Convert them into searchable Hashes and populate the FairTopic
+3. Audit the count of songs seen in Inbound and Fair topics
+
 * Example with all required args publishing only new Song entries:
 ```
 mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --converttofair false --audittopics false --publishnew true --eventcount 1500"
 ```
 * Example with all required args converting Song entries to FairEntries:
 ```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertcount 10 --convertthreadnum 10"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertcount 150 --convertthreadnum 10"
 ```
 * Example with all required args producing topK results from INBOUND and FAIR Topics:
 ```
