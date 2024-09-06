@@ -59,7 +59,16 @@ It makes sense to execute the program multiple times - the logical path is to:
 2. Convert them into searchable Hashes and populate the FairTopic
 3. Audit the count of songs seen in Inbound and Fair topics
 
+
+Note that some rare songs do get throttled and therefore never get added to the FairTopic
+You can check on these songs by executing the following search query in RedisInsight:
+
+```
+FT.SEARCH idx_songs "@isThrottled:{true}" return 2 singer album
+```
+
 ![image info](./fairsongprocessingworkflow.png)
+
 * Example with all required args publishing only new Song entries:
 ```
 mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --converttofair false --audittopics false --publishnew true --eventcount 1500"
