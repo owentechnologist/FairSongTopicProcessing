@@ -3,6 +3,7 @@ package com.redislabs.sa.ot.fstp;
 import net.datafaker.providers.base.*;
 import net.datafaker.*;
 
+import com.redislabs.sa.ot.util.TSWrappedTopicProducer;
 import com.redis.streams.*;
 import com.redis.streams.command.serial.*;
 import com.redis.streams.exception.InvalidMessageException;
@@ -55,6 +56,10 @@ public class NewSongEventWriter{
         String song = titan+" "+foodName;
         String lyrics = loveType+" "+this.faker.food().spice()+" "+loveType+" "+this.faker.text().text(30,2000);
         String releaseDate = "139"+(1924967499+((10000000*(System.nanoTime()%1000))));
-        producer.produce(Map.of("album",albumName,"singer",singerName,"song",song,"lyrics",lyrics,"releaseDate",releaseDate));
+        TSWrappedTopicProducer wrappedProducer = new TSWrappedTopicProducer().setTopicProducer(producer).
+                setInterestingAttributeNameForEntries("singer").
+                setSharedTSLabel("inbound_events");
+        wrappedProducer.produceWithTSLog(Map.of("album",albumName,"singer",singerName,"song",song,"lyrics",lyrics,"releaseDate",releaseDate));
+//      producer.produce(Map.of("album",albumName,"singer",singerName,"song",song,"lyrics",lyrics,"releaseDate",releaseDate));
     }
 }

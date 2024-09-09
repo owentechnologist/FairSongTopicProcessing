@@ -2,8 +2,27 @@ This project demonstrates using Redis Streams and Search and SortedSets to solve
 
 This project also uses the TimeSeries and TopK datatypes to track the arrival time, processing rate, and count for each singer grouping.
 
+![image info](./inbound_events.png)
+
+
+* the following queries target the inbound_events data (these keys are created when you publish/produce entries):
+
+```
+TS.MRANGE - + AGGREGATION count 60000 FILTER sharedlabel=inbound_events GROUPBY uid reduce avg
+```
+
+```
+TS.MRANGE - + AGGREGATION count 6000 FILTER sharedlabel=inbound_events GROUPBY uid reduce avg
+```
+
+```
+TS.MRANGE - + AGGREGATION count 1000 FILTER sharedlabel=inbound_events GROUPBY uid reduce avg
+```
 * here are some queries for the TimeSeries datatype:
 NB: These keys only get generated when you pass --converttofair true
+
+![image info](./fair_events.png)
+
 ```
 TS.MRANGE - + AGGREGATION count 60000 FILTER sharedlabel=fair_events GROUPBY uid reduce avg
 ```
