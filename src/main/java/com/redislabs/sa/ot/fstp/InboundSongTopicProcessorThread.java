@@ -57,7 +57,11 @@ public class InboundSongTopicProcessorThread extends Thread{
             System.out.println("InboundSongTopicProcessorThread Started...");
             long lag = 1;
             while(lag>0){
-                ConsumerGroup group = convertInboundToSearchableHashes(consumerIDSuffixForThread);
+                //try to consume 10 events before checking lag
+                ConsumerGroup group = null;
+                for(int l=0;l<10;l++){
+                    group = convertInboundToSearchableHashes(consumerIDSuffixForThread);
+                }
                 lag=((ConsumerGroupBase)group).getCurrentLagForThisInstanceTopicAndGroup();
             }
         }catch(Throwable t){t.printStackTrace();}
@@ -97,9 +101,9 @@ public class InboundSongTopicProcessorThread extends Thread{
                 //What do we do if we shouldThrottle?
                 //A: do not add it to the FairProcessingTopic now, but instead, wait 2 seconds
                 if(shouldDelay){
-                    //sleep for 2 seconds giving other songs a chance to be added to the
+                    //sleep for 1 second giving other songs a chance to be added to the
                     //FairTopic by other Threads
-                    Thread.sleep(2000);
+                    Thread.sleep(1000);
                 }
                 System.out.println("isDuplicate ==" + isDuplicate);
                 //If not duplicate then isDuplicate == false:
