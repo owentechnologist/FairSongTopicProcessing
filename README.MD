@@ -67,8 +67,9 @@ This example includes a Java library that enables the Topic abstraction.
  * --publishnew   true/false should this program execution write new song entries?
  * --eventcount 100  int how many events to process (including new entries or audited entries)
  * --converttofair  true/false should this program execution populate the FairTopic with songs? 
- * --convertthreadnum  int how many threads to spin up that do the converting to FairTopic?
- * --convertcount   int how many entries should each thread process before exiting?
+ * --convertthreadnum  int how many threads to spin up that do the converting to Hashes?
+ * --searchwritethreadnum in how many threads to spin up that search and write new entries to the FairTopic?
+ * --convertcount   int how many entries should each search thread process before exiting?
  * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer? 
  *
 ```
@@ -94,7 +95,7 @@ mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redi
 ```
 * Example with all required args converting Song entries to FairEntries:
 ```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertcount 150 --convertthreadnum 10"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertthreadnum 2 --searchwritethreadnum 20 --convertcount 150"
 ```
 * Example with all required args producing topK results from INBOUND and FAIR Topics:
 ```

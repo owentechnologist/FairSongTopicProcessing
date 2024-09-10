@@ -20,8 +20,9 @@ import com.redislabs.sa.ot.util.*;
  * --publishnew   true/false should this program execution write new song entries?
  * --eventcount 100  int how many events to process (including new entries or audited entries)
  * --converttofair  true/false should this program execution populate the FairTopic with songs?
- * --convertthreadnum  int how many threads to spin up that do the converting to FairTopic?
- * --convertcount   int how many entries should each thread process before exiting?
+ * --convertthreadnum  int how many threads to spin up that do the converting to Hashes?
+ * --searchwritethreadnum in how many threads to spin up that search and write new entries to the FairTopic?
+ * --convertcount   int how many entries should each search thread process before exiting?
  * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer?
  *
  * Example:  mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.c309.FIXME.cloud.redisFIXME.com --port 12144 --password FIXME <required-args>"
@@ -79,16 +80,25 @@ public class Main {
         boolean convertToFair = Boolean.parseBoolean(getValueForArg("--converttofair"));
         if(convertToFair) {
             int howManyConvertEntryThreads = Integer.parseInt(getValueForArg("--convertthreadnum"));
-            for(int threads=0;threads<howManyConvertEntryThreads;threads++) {
-                FairSongProcessingTopicThread fsptt = new FairSongProcessingTopicThread().
-                        setNumberOfEntriesToConsume(Integer.parseInt(getValueForArg("--convertcount"))).
+            for (int threads = 0; threads < howManyConvertEntryThreads; threads++) {
+                //this class has the ability to see if there are unread entries
+                //it will process all the unread entries...
+                InboundSongTopicProcessorThread fsptt = new InboundSongTopicProcessorThread().
                         setPooledJedis(connection).
                         setInboundSongTopicName(INBOUND_TOPIC_NAME).
-                        setFairProcessingSongTopicName(READY_FOR_FAIR_PROCESSING_TOPIC_NAME).
-                        setInboundEntryDedupKeyName(CF_INBOUND_TOPIC_KEY_NAME).
-                        setFairProcessingEntryDedupKeyName(CF_PROCESSING_TARGET_KEY_NAME).
-                        setSearchIndexName(SEARCH_IDX);
+                        setInboundEntryDedupKeyName(CF_INBOUND_TOPIC_KEY_NAME);
                 new Thread(fsptt).start();
+            }
+
+            int howManySearchers = Integer.parseInt(getValueForArg("--searchwritethreadnum"));
+            for(int searchers=0;searchers< howManySearchers; searchers++){
+                FairTopicEntryFromSearchCreatorThread ftefsct = new FairTopicEntryFromSearchCreatorThread().
+                        setJedisPooled(connection).
+                        setNumberOfEntriesToConsumePerThread(Integer.parseInt(getValueForArg("--convertcount"))).
+                        setReadyForFairProcessingTopicName(READY_FOR_FAIR_PROCESSING_TOPIC_NAME).
+                        setDedupProcessingTargetKeyName(CF_PROCESSING_TARGET_KEY_NAME).
+                        setSearchIndexName(SEARCH_IDX);
+                new Thread(ftefsct).start();
             }
         }
 

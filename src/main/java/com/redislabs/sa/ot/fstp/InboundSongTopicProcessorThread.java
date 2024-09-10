@@ -22,64 +22,42 @@ import com.redislabs.sa.ot.util.*;
  * Some songs are randomly Throttled so that they are not added at all until some
  * Other process searches for them and changes their isThrottled flag to false
  */
-public class FairSongProcessingTopicThread extends Thread{
+public class InboundSongTopicProcessorThread extends Thread{
 
     JedisPooled connection = null;
-    int numberOfEntriesToConsume=10;
     String INBOUND_TOPIC_NAME=null;
-    String READY_FOR_FAIR_PROCESSING_TOPIC_NAME=null;
     String DEDUP_INBOUND_TOPIC_KEY_NAME=null;
-    String DEDUP_PROCESSING_TARGET_KEY_NAME=null;
-    String searchIndexName = null;
     static volatile int consumerIDSCounterForThreads=0;
     int consumerIDSuffixForThread=0;
 
-    public FairSongProcessingTopicThread setInboundEntryDedupKeyName(String name){
+    public InboundSongTopicProcessorThread setInboundEntryDedupKeyName(String name){
         this.DEDUP_INBOUND_TOPIC_KEY_NAME=name;
         return this;
     }
-    public FairSongProcessingTopicThread setFairProcessingEntryDedupKeyName(String name){
-        this.DEDUP_PROCESSING_TARGET_KEY_NAME=name;
-        return this;
-    }
-    public FairSongProcessingTopicThread setSearchIndexName(String name){
-        this.searchIndexName=name;
-        return this;
-    }
 
-    public FairSongProcessingTopicThread setNumberOfEntriesToConsume(int howMany){
-        this.numberOfEntriesToConsume=howMany;
-        return this;
-    }
-    public FairSongProcessingTopicThread setPooledJedis(JedisPooled conn){
+    public InboundSongTopicProcessorThread setPooledJedis(JedisPooled conn){
         this.connection=conn;
         return this;
     }
-    public FairSongProcessingTopicThread setInboundSongTopicName(String topicName){
+
+    public InboundSongTopicProcessorThread setInboundSongTopicName(String topicName){
         this.INBOUND_TOPIC_NAME=topicName;
-        return this;
-    }
-    public FairSongProcessingTopicThread setFairProcessingSongTopicName(String topicName){
-        this.READY_FOR_FAIR_PROCESSING_TOPIC_NAME=topicName;
         return this;
     }
 
     public void run(){
-        if((null==connection)||(null==searchIndexName)||
-                (null==INBOUND_TOPIC_NAME)||(null==READY_FOR_FAIR_PROCESSING_TOPIC_NAME)||
-                (null==DEDUP_INBOUND_TOPIC_KEY_NAME)||(null==DEDUP_PROCESSING_TARGET_KEY_NAME)){
+        if((null==connection)||
+                (null==INBOUND_TOPIC_NAME)||
+                (null==DEDUP_INBOUND_TOPIC_KEY_NAME)){
             throw new RuntimeException("\n\t---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
         }
         try{
             consumerIDSCounterForThreads++;
             this.consumerIDSuffixForThread=consumerIDSCounterForThreads;
-            System.out.println("FairSongProcessingTopicThread Started...");
-            if(consumerIDSuffixForThread%2==1) { //mixing up the behavior of this class
-                searchAndAddToFairProcessingTopic();
-            }
+            System.out.println("InboundSongTopicProcessorThread Started...");
             long lag = 1;
             while(lag>0){
-                ConsumerGroup group = convertInboundToFair(consumerIDSuffixForThread);
+                ConsumerGroup group = convertInboundToSearchableHashes(consumerIDSuffixForThread);
                 lag=((ConsumerGroupBase)group).getCurrentLagForThisInstanceTopicAndGroup();
             }
         }catch(Throwable t){t.printStackTrace();}
@@ -91,12 +69,12 @@ public class FairSongProcessingTopicThread extends Thread{
      * writing an enriched version of the entry as hash and
      * querying the search index for the next fair entry
      * (sorted by date ASC and !queued and grouped by album)
-     * Every 20th song will be set to throttled - just to prove that has an impact
+     * Every 20th song or so will be set to throttled - just to prove that has an impact
      * @param args
      * @param connection
      * @throws Throwable
      */
-    ConsumerGroup convertInboundToFair(int consumerIDSuffixForThread)throws Throwable {
+    ConsumerGroup convertInboundToSearchableHashes(int consumerIDSuffixForThread)throws Throwable {
         String consumerGroupName = "groupA";
         ConsumerGroup consumer = new ConsumerGroup(connection, INBOUND_TOPIC_NAME, consumerGroupName);
         //for (int x = 0; x < numberOfEntriesToConsume; x++) {
@@ -157,64 +135,5 @@ public class FairSongProcessingTopicThread extends Thread{
             }catch(Throwable ttt){ttt.printStackTrace();}
         //}//end of convertTargetCount loop
         return consumer;
-    }
-
-    void searchAndAddToFairProcessingTopic() throws InvalidTopicException,
-            TopicNotFoundException,InvalidMessageException,ProducerTimeoutException{
-        /**
-         * Next section focuses on moving searched/sorted/filtered entries into the
-         * FairTopic...
-         * Search criteria includes: isQueued false
-         * As part of the processing this method sets isQueued to true
-         */
-        long retentionTimeSeconds = 86400 * 8;
-        long maxStreamLength = 2500;
-        long streamCycleSeconds = 86400; // Create a new stream after one day, regardless of the current stream's length
-        SerialTopicConfig config2 = new SerialTopicConfig(
-                READY_FOR_FAIR_PROCESSING_TOPIC_NAME,
-                retentionTimeSeconds,
-                maxStreamLength,
-                streamCycleSeconds,
-                SerialTopicConfig.TTLFuzzMode.RANDOM);
-        TopicManager fairTopicManager = TopicManager.createTopic(connection, config2);
-        TopicProducer fairProducer = new TopicProducer(connection, READY_FOR_FAIR_PROCESSING_TOPIC_NAME);
-        //use search to find the fair SongEvent to Process Next
-        SearchHelper searcher = new SearchHelper();
-        for (int x = 0; x < numberOfEntriesToConsume; x++) {
-            boolean entityExists = true;
-            String hashKeyNameToProcessNext = "";
-            int retryCount = 10; //retry 10 times to allow time for new entries to arrive
-            while ((entityExists) && (retryCount > 0)) {
-                hashKeyNameToProcessNext = searcher.performSearchGetResultHashKey(connection, searchIndexName, 1);
-                //dedup the song_album_singer using SortedSet with 5 min window (300 seconds:
-                entityExists = SlidingWindowHelper.itemExistsWithinTimeWindow("Z:" + DEDUP_PROCESSING_TARGET_KEY_NAME, hashKeyNameToProcessNext, connection, 300);
-                System.out.println("Hmmm...  entityExists == " + entityExists + " keyname == " + hashKeyNameToProcessNext);
-                retryCount--;
-            }
-            //Process the Song Event (not necessarily the latest one just received)
-            //second topic is populated with fairly distributed events across all albums and singers
-            String fairSingerName = null;
-            if(null!=hashKeyNameToProcessNext) {
-                fairSingerName = connection.hget(hashKeyNameToProcessNext, "singer");
-            }
-            if (null != fairSingerName) {
-                //Dedup the song_album_singer using CuckooFilter
-                if (!connection.exists(DEDUP_PROCESSING_TARGET_KEY_NAME)) {
-                    connection.cfReserve(DEDUP_PROCESSING_TARGET_KEY_NAME, 10000000);
-                }
-                boolean isNewTargetKey = connection.cfAddNx(DEDUP_PROCESSING_TARGET_KEY_NAME, hashKeyNameToProcessNext);
-                if(isNewTargetKey) {
-                    fairProducer.produce(Map.of("keyName", hashKeyNameToProcessNext, "singer", fairSingerName));
-                    connection.hset(hashKeyNameToProcessNext, "isQueued", "true");
-                    //TimeSeriesEventLogger uses JedisPooledHelper to init JedisPooled connection when created:
-                    //To make logger more robust you can assign startUpArgs to the instance (not done in this example)
-                    TimeSeriesEventLogger logger = new TimeSeriesEventLogger().setSharedLabel("fair_events").
-                            setCustomLabel(fairSingerName).
-                            setTSKeyNameForMyLog("TS:" + fairSingerName).
-                            initTS();
-                    logger.addEventToMyTSKey(1.0d);
-                }
-            }
-        }//end of for loop: numberOfEntriesToConsume
     }
 }

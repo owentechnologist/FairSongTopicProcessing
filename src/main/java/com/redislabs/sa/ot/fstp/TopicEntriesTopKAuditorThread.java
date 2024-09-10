@@ -73,9 +73,10 @@ public class TopicEntriesTopKAuditorThread extends Thread{
             for(int x= 0;x<numberOfMessagesToProcess;x++) {
                 TopicEntry consumedMessage = consumer.consume(consumerInstanceName);
                 if (!(null == consumedMessage)) {
-                    consumedMessage.getMessage().forEach(
-                            (key, value) -> System.out.println(key + ":" + value)
-                    );
+                    System.out.println("singer" + ":" + consumedMessage.getMessage().get("singer"));
+                    //consumedMessage.getMessage().forEach(
+                    //      (key, value) -> System.out.println(key + ":" + value)
+                    //);
                     String topKValue = consumedMessage.getMessage().get(this.attributeNameToTrack);
                     topKHelper.addEntryToMyTopKKey(topKValue);
 
