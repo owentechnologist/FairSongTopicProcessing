@@ -101,9 +101,9 @@ public class InboundSongTopicProcessorThread extends Thread{
                 //What do we do if we shouldThrottle?
                 //A: do not add it to the FairProcessingTopic now, but instead, wait 2 seconds
                 if(shouldDelay){
-                    //sleep for 1 second giving other songs a chance to be added to the
+                    //sleep for 50 milliseconds giving other songs a chance to be added to the
                     //FairTopic by other Threads
-                    Thread.sleep(1000);
+                    Thread.sleep(50);
                 }
                 System.out.println("isDuplicate ==" + isDuplicate);
                 //If not duplicate then isDuplicate == false:

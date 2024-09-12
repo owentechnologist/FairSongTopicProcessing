@@ -45,9 +45,9 @@ public class NewSongEventWriter{
         String foodName = this.faker.food().sushi();//37 of these
         String buzzWord = this.faker.marketing().buzzwords(); //roughly 50 of these
         String loveType = loveHate[(int)(System.nanoTime()%2)];
-        //need to create a larger number of songs from 3 artists to see if
+        //need to create a larger number of songs from 2 artists to see if
         // fairness can prevail even as more songs come in from certain 'channels'
-        String singerName = singerNames[(int)(System.nanoTime() % 3)];
+        String singerName = singerNames[(int)(System.nanoTime() % 2)];
         if(System.currentTimeMillis()%2==0) {
             singerName = singerNames[(int) (System.nanoTime() % 15)];
         }
