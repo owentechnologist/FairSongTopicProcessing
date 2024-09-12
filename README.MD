@@ -5,7 +5,9 @@ This project also uses the TimeSeries and TopK datatypes to track the arrival ti
 * Notice that in this screenshot there are several instances of Sting and Alicia Keys having 3 and 2 songs published in the same 500 millis time window:
 
 ![image info](./inbound_events.png)
-
+```
+TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=inbound_events uid=(Elvis,Sting) GROUPBY uid reduce avg
+```
 
 * the following queries target the inbound_events data (these keys are created when you publish/produce entries):
 
@@ -27,8 +29,10 @@ NB: These keys only get generated when you pass --converttofair true
 Success!  a more fair distribution of the incoming songs!
 
 ![image info](./fair_events.png)
-
 ```
+TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=fair_events uid=(Elvis,Sting) GROUPBY uid reduce avg
+```
+
 TS.MRANGE - + AGGREGATION count 60000 FILTER sharedlabel=fair_events GROUPBY uid reduce avg
 ```
 ```
