@@ -8,6 +8,7 @@ import com.redis.streams.exception.InvalidTopicException;
 import com.redis.streams.exception.ProducerTimeoutException;
 import com.redis.streams.exception.TopicNotFoundException;
 import java.util.Map;
+import java.util.ArrayList;
 import com.redislabs.sa.ot.util.*;
 
 /**
@@ -92,42 +93,59 @@ public class FairTopicEntryFromSearchCreatorThread extends Thread{
         TopicProducer fairProducer = new TopicProducer(connection, READY_FOR_FAIR_PROCESSING_TOPIC_NAME);
         //use search to find the fair SongEvent to Process Next
         SearchHelper searcher = new SearchHelper();
+        // at some point this should be replaced with endless loop
+        // as we shouldn't have a limit on numberOfEntriesToConsume:
         for (int x = 0; x < numberOfEntriesToConsume; x++) {
             boolean entityExists = true;
-            String hashKeyNameToProcessNext = "";
+            int randChoice = 0;
+            int resultLength = 0;
+            int numberOfPossibleResults=30; // this should be tweaked for optimal result size
+            String singularKeyNameToProcessNext = "";
+            ArrayList<String> hashKeyNamesToProcessNext = null;
             int retryCount = 10; //retry 10 times to allow time for new entries to arrive
             while ((entityExists) && (retryCount > 0)) {
                 try{
-                    Thread.sleep(10);
+                    Thread.sleep(50);
                 }catch(Throwable t){}
-                hashKeyNameToProcessNext = searcher.performSearchGetResultHashKey(connection, searchIndexName, 1);
+                hashKeyNamesToProcessNext = searcher.performSearchGetResultHashKey(connection, searchIndexName, numberOfPossibleResults);
+                resultLength = hashKeyNamesToProcessNext.size();
+                System.out.println("Debug FairsearchCreator... hashKeyNamesToProcessNext.size();== "+resultLength);
                 //dedup the song_album_singer using SortedSet with 5 min window (300 seconds:
-                entityExists = SlidingWindowHelper.itemExistsWithinTimeWindow("Z:" + DEDUP_PROCESSING_TARGET_KEY_NAME, hashKeyNameToProcessNext, connection, 300);
-                System.out.println("Hmmm...  entityExists == " + entityExists + " keyname == " + hashKeyNameToProcessNext);
+                //randomly choose from the results to limit collisions with other threads:
+                if(resultLength>0){
+                    randChoice = (int)(System.nanoTime()%resultLength);
+                    singularKeyNameToProcessNext = hashKeyNamesToProcessNext.get(randChoice);
+                    entityExists = SlidingWindowHelper.itemExistsWithinTimeWindow("Z:" + DEDUP_PROCESSING_TARGET_KEY_NAME, singularKeyNameToProcessNext, connection, 300);
+
+                    System.out.println("Hmmm...  entityExists == " + entityExists + " keyname == " + singularKeyNameToProcessNext);
+                }
                 retryCount--;
             }
-            //Process the Song Event (not necessarily the latest one just received)
-            //second topic is populated with fairly distributed events across all albums and singers
+            //Process the Song Event
+            //second topic should be populated with fairly distributed events across all albums and singers
             String fairSingerName = null;
-            if(null!=hashKeyNameToProcessNext) {
-                fairSingerName = connection.hget(hashKeyNameToProcessNext, "singer");
+            if(null!=singularKeyNameToProcessNext) {
+                fairSingerName = connection.hget(singularKeyNameToProcessNext, "singer");
             }
             if (null != fairSingerName) {
                 //Dedup the song_album_singer using CuckooFilter
                 if (!connection.exists(DEDUP_PROCESSING_TARGET_KEY_NAME)) {
                     connection.cfReserve(DEDUP_PROCESSING_TARGET_KEY_NAME, 10000000);
                 }
-                boolean isNewTargetKey = connection.cfAddNx(DEDUP_PROCESSING_TARGET_KEY_NAME, hashKeyNameToProcessNext);
+                boolean isNewTargetKey = connection.cfAddNx(DEDUP_PROCESSING_TARGET_KEY_NAME, singularKeyNameToProcessNext);
                 if(isNewTargetKey) {
-                    fairProducer.produce(Map.of("keyName", hashKeyNameToProcessNext, "singer", fairSingerName));
-                    connection.hset(hashKeyNameToProcessNext, "isQueued", "true");
-                    //TimeSeriesEventLogger uses JedisPooledHelper to init JedisPooled connection when created:
-                    //To make logger more robust you can assign startUpArgs to the instance (not done in this example)
-                    TimeSeriesEventLogger logger = new TimeSeriesEventLogger().setSharedLabel("fair_events").
-                            setCustomLabel(fairSingerName).
-                            setTSKeyNameForMyLog("TS:" + fairSingerName).
-                            initTS();
-                    logger.addEventToMyTSKey(1.0d);
+                    try{
+                        fairProducer.produce(Map.of("keyName", singularKeyNameToProcessNext, "singer", fairSingerName));
+                        connection.hset(singularKeyNameToProcessNext, "isQueued", "true");
+
+                        //TimeSeriesEventLogger uses JedisPooledHelper to init JedisPooled connection when created:
+                        //To make logger more robust you can assign startUpArgs to the instance (not done in this example)
+                        TimeSeriesEventLogger logger = new TimeSeriesEventLogger().setSharedLabel("fair_events").
+                                setCustomLabel(fairSingerName).
+                                setTSKeyNameForMyLog("TS:" + fairSingerName).
+                                initTS();
+                        logger.addEventToMyTSKey(1.0d);
+                    }catch(java.lang.NumberFormatException nfe){}
                 }
             }
         }//end of for loop: numberOfEntriesToConsume

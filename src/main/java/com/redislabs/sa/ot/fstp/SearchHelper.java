@@ -29,7 +29,8 @@ public class SearchHelper{
      * The one that mostly matters is @isQueued - which indicates that Hash has already been added
      * to the FairProcessingTopic and should not be included in search results
      */
-    public String performSearchGetResultHashKey(JedisPooled connection,String idxName,int limitMax){
+    public ArrayList<String> performSearchGetResultHashKey(JedisPooled connection,String idxName,int limitMax){
+        //System.out.println("Debug search limit arg == "+limitMax);
         long startTime=System.currentTimeMillis();
         //sortBY(). SHOULD WE SORTBY TOA?
         AggregationBuilder builder = new AggregationBuilder(this.queryGuts).
@@ -38,15 +39,15 @@ public class SearchHelper{
                 sortBy(SortedField.asc("@TOA")).
                 limit(0,limitMax).dialect(2);//dialect 3 not needed for this query
         AggregationResult ar = connection.ftAggregate(idxName,builder);
-        boolean isArraylist = false;
+        boolean isNoResult = false;
         if(ar.getTotalResults()<1){
             java.util.Map<String,Object> m = connection.ftInfo(idxName);
             Object s=m.get(0);
             try {
                 ArrayList<String> al = (ArrayList<String>) s;
-                isArraylist=true;
+                isNoResult=true;
             }catch(Throwable t){t.printStackTrace();}
-            if(isArraylist){
+            if(isNoResult){
                 System.out.println(s+"  No results this time... is there data in Redis?");
             }else{
                 throw new RuntimeException("\n\nSEARCH INDEX MISSING!\nYou must create the index using: \n"+
@@ -54,12 +55,17 @@ public class SearchHelper{
                         "\n");
             }
         }
-        String hashKeyName = null;//"no result";
-        if(!isArraylist) {
-            hashKeyName = ar.getRow(0).getString("__key");
+        ArrayList<String> hashKeyNamesList = new ArrayList<String>();
+        if(!isNoResult) { //we have results!
+            for(int r=0;r<limitMax;r++){
+                try{
+                    hashKeyNamesList.add(ar.getRow(r).getString("__key"));
+                }catch(Throwable t){}
+            }
         }
-        System.out.println("\nSearch took "+(System.currentTimeMillis()-startTime)+" millis... Result: keyname == "+hashKeyName);
-
-        return hashKeyName;
+        if(hashKeyNamesList.size()>0){
+            System.out.println("\nSearch took "+(System.currentTimeMillis()-startTime)+" millis... Result: sample keyname == "+hashKeyNamesList.get(0));
+        }
+        return hashKeyNamesList;
     }
 }
