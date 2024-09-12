@@ -2,6 +2,8 @@ This project demonstrates using Redis Streams and Search and SortedSets to solve
 
 This project also uses the TimeSeries and TopK datatypes to track the arrival time, processing rate, and count for each singer grouping.
 
+* Notice that in this screenshot there are several instances of Sting and Alicia Keys having 3 and 2 songs published in the same 500 millis time window:
+
 ![image info](./inbound_events.png)
 
 
@@ -20,6 +22,9 @@ TS.MRANGE - + AGGREGATION count 1000 FILTER sharedlabel=inbound_events GROUPBY u
 ```
 * here are some queries for the TimeSeries datatype:
 NB: These keys only get generated when you pass --converttofair true
+
+* Notice that (due to the work done by this solution) in this screenshot there are fewer instances of Sting and Alicia Keys having 3 and 2 songs presented for processing in the same 500 millis time window:
+Success!  a more fair distribution of the incoming songs!
 
 ![image info](./fair_events.png)
 
