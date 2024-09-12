@@ -28,15 +28,23 @@ import com.redislabs.sa.ot.util.*;
  * Example:  mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.c309.FIXME.cloud.redisFIXME.com --port 12144 --password FIXME <required-args>"
 
  * Example with all required args publishing only new Song entries:
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-10900.re-cluster1.ps-redislabs.org --port 10900 --eventcount 1500 --publishnew true --converttofair false --convertcount 0 --audittopics false"
-
+ ```
+ mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --converttofair false --audittopics false --publishnew true --eventcount 1500"
+ ```
  * Example with all required args converting Song entries to FairEntries:
+ ```
+ mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertthreadnum 10 --searchwritethreadnum 1 --convertcount 1500"
+ ```
+ * Example with all required args producing topK results from INBOUND and FAIR Topics:
+ ```
+ mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --publishnew false --converttofair false --audittopics true --eventcount 1500"
+ ```
 
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-10900.re-cluster1.ps-redislabs.org --port 10900 --eventcount 1500 --publishnew false --converttofair true --convertcount 10 --audittopics false"
-
- * It is expected that the Search module is enabled and this index has been created...
- * Execute the following from redis-cli / redisInsight if not:
- * FT.CREATE idx_songs prefix 1 song SCHEMA singer TAG SORTABLE album TAG SORTABLE isTombstoned TAG isQueued TAG isThrottled TAG TimeOfArrival NUMERIC SORTABLE
+ * It is expected that the Search module is enabled and the following index has been created...
+ * Execute the following from redis-cli / redisInsight to create the necessary index:
+ ```
+ FT.CREATE idx_songs prefix 1 song SCHEMA singer TAG SORTABLE album TAG SORTABLE isTombstoned TAG isQueued TAG isThrottled TAG TimeOfArrival NUMERIC SORTABLE
+ ```
  *
  * There will always be at most 15 singers,
  * 100 albums per singer,
@@ -54,8 +62,11 @@ public class Main {
     /**
      * In this version, Messages will be ack'd when they are dupes or
      * when they are successfully added to the Search Index and processed
+     * TODO: the deletion is not implemented yet...
+     * <deletion-not-implemented>
      * To delete the message processed by a consumer add:
      * --delmessage true
+     * </deletion-not-implemented>
      *
      * @param args
      * @throws Throwable The actual Exceptions likely to be thrown include:

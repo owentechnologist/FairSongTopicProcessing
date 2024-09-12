@@ -95,7 +95,7 @@ mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redi
 ```
 * Example with all required args converting Song entries to FairEntries:
 ```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertthreadnum 2 --searchwritethreadnum 20 --convertcount 150"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertthreadnum 10 --searchwritethreadnum 1 --convertcount 1500"
 ```
 * Example with all required args producing topK results from INBOUND and FAIR Topics:
 ```
