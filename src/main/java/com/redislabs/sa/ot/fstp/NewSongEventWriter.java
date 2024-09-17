@@ -17,14 +17,46 @@ import java.util.Map;
  *  * 100 albums per singer,
  *  * and at most 1,000 songs per album.
  */
-public class NewSongEventWriter{
+public class NewSongEventWriter extends Thread{
+    TopicProducer topicProducer = null;
+    Integer howManySongEvents = null;
+    Integer sleepMillis = null;
     Faker faker = new Faker();
     String[] loveHate = new String[]{"Painful Love Hurts ","Sweet Love Heals "};
     String[] singerNames = new String[]{
-            "Billie Eilish","Elvis","Cher","Stevie Wonder","Sting",
+            "Elvis","Cher","Stevie Wonder","Billie Eilish","Sting",
             "Peter Gabriel","Elton John","Freddie Mercury","John Legend","Taylor Swift",
             "Rhianna","Madonna","Lady Gaga","Ariana Grande","Alicia Keys"
     };
+
+    public NewSongEventWriter setHowManySongEventsToWrite(int howManySongEventsToWrite){
+        this.howManySongEvents=new Integer(howManySongEventsToWrite);
+        return this;
+    }
+    public NewSongEventWriter setTopicProducer(TopicProducer topicProducer){
+        this.topicProducer=topicProducer;
+        return this;
+    }
+    public NewSongEventWriter setSleepMillisBetweenWrites(int sleepMillisBetweenWrites){
+        this.sleepMillis=new Integer(sleepMillisBetweenWrites);
+        return this;
+    }
+
+    public void run(){
+        if((null==topicProducer)||
+                (null==howManySongEvents)||(null==sleepMillis)){
+            throw new RuntimeException("\n\t---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
+        }
+        for (int x = 0; x < howManySongEvents; x++) {
+            try{
+                publishNewSongToTopic(topicProducer);
+                //slow down the writing a bit to help with visibility into the behavior
+                //ie: which singers are getting the lion's share of the song entries?
+                Thread.sleep(sleepMillis);
+            }catch(Throwable t){}
+        }
+    }
+
 
     /**
      * Figure out what exceptions are good to throw
@@ -48,8 +80,8 @@ public class NewSongEventWriter{
         //need to create a larger number of songs from 2 artists to see if
         // fairness can prevail even as more songs come in from certain 'channels'
         String singerName = singerNames[(int)(System.nanoTime() % 2)];
-        if(System.currentTimeMillis()%2==0) {
-            singerName = singerNames[(int) (System.nanoTime() % 15)];
+        if(System.currentTimeMillis()%10==0) { // the other singers have songs published
+            singerName = singerNames[(int) ((System.nanoTime() % 13)+2)];
         }
         String titan = this.faker.ancient().titan();//roughly 34 of these
         String albumName = singerName+" presents "+buzzWord+" "+loveType;//~100 of these per singer

@@ -150,15 +150,8 @@ public class Main {
         TopicManager manager = TopicManager.createTopic(connection, config);
         int howManySongEvents = Integer.parseInt(getValueForArg("--eventcount"));
         TopicProducer producer = new TopicProducer(connection,INBOUND_TOPIC_NAME);
-        NewSongEventWriter nsew = new NewSongEventWriter();
-        for (int x = 0; x < howManySongEvents; x++) {
-            nsew.publishNewSongToTopic(producer);
-            try{
-                //slow down the writing a bit to help with visibility into the behavior
-                //ie: which singers are getting the lion's share of the song entries?
-                Thread.sleep(100);
-            }catch(Throwable t){}
-        }
+        NewSongEventWriter nsew = new NewSongEventWriter().setTopicProducer(producer).setHowManySongEventsToWrite(howManySongEvents).setSleepMillisBetweenWrites(100);
+        new Thread(nsew).start();
     }
 
     /**

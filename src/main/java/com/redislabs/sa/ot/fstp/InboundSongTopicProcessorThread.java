@@ -73,7 +73,6 @@ public class InboundSongTopicProcessorThread extends Thread{
      * writing an enriched version of the entry as hash and
      * querying the search index for the next fair entry
      * (sorted by date ASC and !queued and grouped by album)
-     * Every 20th song or so will be set to throttled - just to prove that has an impact
      * @param args
      * @param connection
      * @throws Throwable
@@ -120,9 +119,11 @@ public class InboundSongTopicProcessorThread extends Thread{
                     String isTombstoned = "false";
                     String isQueued = "false";
                     String isThrottled = "false";
+                    /*  This needs to be a separate mechanism not tied to the initial creation of the Hashes
                     if (System.nanoTime() % 50 == 0) { //rare event
                         isThrottled = "true";
                     }
+                    */
                     Map map = Map.of("singer", singer, "album", album, "song", song, "releaseDate",
                             releaseDate, "lyrics", lyrics, "TimeOfArrival", timeOfArrival,
                             "isTombstoned", isTombstoned, "isQueued", isQueued, "isThrottled", isThrottled);

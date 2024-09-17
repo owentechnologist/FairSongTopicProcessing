@@ -2,6 +2,12 @@ This project demonstrates using Redis Streams and Search and SortedSets to solve
 
 This project also uses the TimeSeries and TopK datatypes to track the arrival time, processing rate, and count for each singer grouping.
 
+## Thoughts on Fairness
+
+This solution focuses on a push model where the incoming songs drive the processing rate.
+
+Behind the scenes, the rate at which the incoming songs arrive is influenced by 
+
 * Notice that in this screenshot there are several instances of Sting and Alicia Keys having 3 and 2 songs published in the same 500 millis time window:
 
 ![image info](./inbound_events.png)
@@ -29,15 +35,19 @@ NB: These keys only get generated when you pass --converttofair true
 Success!  a more fair distribution of the incoming songs!
 
 ![image info](./fair_events.png)
+
 ```
 TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=fair_events uid=(Elvis,Sting) GROUPBY uid reduce avg
 ```
 
+```
 TS.MRANGE - + AGGREGATION count 60000 FILTER sharedlabel=fair_events GROUPBY uid reduce avg
 ```
+
 ```
 TS.MRANGE - + AGGREGATION count 6000 FILTER sharedlabel=fair_events GROUPBY uid reduce avg
 ```
+
 ```
 TS.MRANGE - + AGGREGATION count 1000 FILTER sharedlabel=fair_events GROUPBY uid reduce avg
 ```
@@ -71,6 +81,7 @@ You can spin up a free redis database with these capabilities in the cloud here:
 This example includes a Java library that enables the Topic abstraction.
 
 * Execute the mvn command with necessary args to connect to your Redis instance
+
 ``` 
  * possible args:
  * --publishnew   true/false should this program execution write new song entries?
@@ -83,20 +94,31 @@ This example includes a Java library that enables the Topic abstraction.
  *
 ```
 
-It makes sense to execute the program multiple times - the logical path is to:
+* Example start command to execute Producing songs, converting them, and making them visible in the FairTopic:
+
+```
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --publishnew true --converttofair true --convertcount 1000 --audittopics false --convertthreadnum 10 --searchwritethreadnum 1 --eventcount 1000"
+```
+This ^ sort of run is pretty noisy, as all the operations happen in the same VM and the shell gets to be full of activity reported by the various Threads...
+
+It is also possible to execute the program multiple times in separate VMs - the logical path is to:
 1. Produce new songs
-2. Convert them into searchable Hashes and populate the FairTopic
-3. Audit the count of songs seen in Inbound and Fair topics
+2. Convert them into searchable Hashes 
+3. Populate the FairTopic
+4. Audit the count of songs seen in Inbound and Fair topics
 
 
-Note that some rare songs do get throttled and therefore never get added to the FairTopic
-You can check on these songs by executing the following search query in RedisInsight:
+Note that throttling is not enabled yet as the Fairness behavior is harder to spot if some songs are throttled and therefore never get added to the FairTopic
+
+You can confirm if there are any Throttled songs by executing the following search query in RedisInsight:
+
 
 ```
 FT.SEARCH idx_songs "@isThrottled:{true}" return 2 singer album
 ```
 
 ![image info](./fairsongprocessingworkflow.png)
+
 
 * Example with all required args publishing only new Song entries:
 ```
@@ -116,6 +138,12 @@ mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redi
 ```
 FT.CREATE idx_songs prefix 1 song SCHEMA singer TAG SORTABLE album TAG SORTABLE isTombstoned TAG isQueued TAG isThrottled TAG TimeOfArrival NUMERIC SORTABLE
 ```
+
+You can run your own search queries to see what is in the data:
+```
+FT.AGGREGATE idx_songs "@isQueued:{false} @isThrottled:{false} @isTombstoned:{false}" LOAD 2 @__key @TimeOfArrival GROUPBY 3 @__key @singer @album REDUCE MAX 1 TimeOfArrival AS TOA SORTBY 2 @TOA ASC LIMIT 0 10 DIALECT 2
+```
+
 
 Note that to build this project you need to add the necessary jar to your local mvn repo:
 
