@@ -49,7 +49,7 @@ public class InboundSongTopicProcessorThread extends Thread{
         if((null==connection)||
                 (null==INBOUND_TOPIC_NAME)||
                 (null==DEDUP_INBOUND_TOPIC_KEY_NAME)){
-            throw new RuntimeException("\n\t---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
+            throw new RuntimeException("\n\tInboundSongTopicProcessorThread---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
         }
         try{
             consumerIDSCounterForThreads++;
@@ -93,16 +93,16 @@ public class InboundSongTopicProcessorThread extends Thread{
                 dedupValue += "_" + consumedMessage.getMessage().get("song");
 
                 boolean isDuplicate = true; // same song on same album same singer do not process
-                boolean shouldDelay = false; // same singer as seen in past 2 seconds so throttle
+                boolean shouldDelay = false; // same singer as seen in past 1 seconds so throttle
 
                 isDuplicate=SlidingWindowHelper.itemExistsWithinTimeWindow("Z:"+DEDUP_INBOUND_TOPIC_KEY_NAME,dedupValue,connection,300);
-                shouldDelay=SlidingWindowHelper.itemExistsWithinTimeWindow("Z:SINGERS_DELAYED",singer,connection,2);
-                //What do we do if we shouldThrottle?
-                //A: do not add it to the FairProcessingTopic now, but instead, wait 2 seconds
+                shouldDelay=SlidingWindowHelper.itemExistsWithinTimeWindow("Z:SINGERS_DELAYED",singer,connection,1);
+                //What do we do if we delay?
+                //A: do not add it to the FairProcessingTopic now, but instead, wait 1 seconds
                 if(shouldDelay){
-                    //sleep for 50 milliseconds giving other songs a chance to be added to the
+                    //sleep for 10 milliseconds giving other songs a chance to be added to the
                     //FairTopic by other Threads
-                    Thread.sleep(50);
+                    Thread.sleep(10);
                 }
                 System.out.println("isDuplicate ==" + isDuplicate);
                 //If not duplicate then isDuplicate == false:
@@ -113,7 +113,8 @@ public class InboundSongTopicProcessorThread extends Thread{
                     System.out.println("EntryID = " + uid);
                     String album = consumedMessage.getMessage().get("album");
                     String song = consumedMessage.getMessage().get("song");
-                    String lyrics = consumedMessage.getMessage().get("lyrics");
+                    String lyricKey = consumedMessage.getMessage().get("lyricsKey");
+                    String lyricsLength = consumedMessage.getMessage().get("lyricsLength");
                     String releaseDate = consumedMessage.getMessage().get("releaseDate");
                     String timeOfArrival = uid.split("-")[0];
                     String isTombstoned = "false";
@@ -125,7 +126,7 @@ public class InboundSongTopicProcessorThread extends Thread{
                     }
                     */
                     Map map = Map.of("singer", singer, "album", album, "song", song, "releaseDate",
-                            releaseDate, "lyrics", lyrics, "TimeOfArrival", timeOfArrival,
+                            releaseDate, "lyricsKey", lyricKey,"lyricsLength",lyricsLength, "TimeOfArrival", timeOfArrival,
                             "isTombstoned", isTombstoned, "isQueued", isQueued, "isThrottled", isThrottled);
                     connection.hset("song:" + uid, map);
                 }

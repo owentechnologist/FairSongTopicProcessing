@@ -14,7 +14,7 @@ import com.redis.streams.exception.ProducerTimeoutException;
 import com.redis.streams.exception.TopicNotFoundException;
 import java.util.Map;
 
-public class TopicEntriesTopKAuditorThread extends Thread{
+public class FairTopicSongLyricProcessor extends Thread{
 
     String topicName;
     String consumerGroupName;
@@ -22,56 +22,50 @@ public class TopicEntriesTopKAuditorThread extends Thread{
     String attributeNameToTrack;
     JedisPooled connection;
     int numberOfMessagesToProcess=1;
-    int topKSize=100;
 
-    public TopicEntriesTopKAuditorThread setTopKSize(int topKSize){
-        this.topKSize=topKSize;
-        return this;
-    }
 
-    public TopicEntriesTopKAuditorThread setJedisPooledConnection(JedisPooled connection){
+    public FairTopicSongLyricProcessor setJedisPooledConnection(JedisPooled connection){
         this.connection=connection;
         return this;
     }
 
-    public TopicEntriesTopKAuditorThread setTopicName(String topicName){
+    public FairTopicSongLyricProcessor setTopicName(String topicName){
         this.topicName=topicName;
         return this;
     }
 
-    public TopicEntriesTopKAuditorThread setAttributeNameToTrack(String attributeNameToTrack){
+    public FairTopicSongLyricProcessor setAttributeNameToTrack(String attributeNameToTrack){
         this.attributeNameToTrack=attributeNameToTrack;
         return this;
     }
 
-    public TopicEntriesTopKAuditorThread setConsumerGroupName(String consumerGroupName){
+    public FairTopicSongLyricProcessor setConsumerGroupName(String consumerGroupName){
         this.consumerGroupName=consumerGroupName;
         return this;
     }
 
-    public TopicEntriesTopKAuditorThread setConsumerInstanceName(String consumerInstanceName){
+    public FairTopicSongLyricProcessor setConsumerInstanceName(String consumerInstanceName){
         this.consumerInstanceName=consumerInstanceName;
         return this;
     }
 
-    public TopicEntriesTopKAuditorThread setNumberOfMessagesToProcess(int numberOfMessagesToProcess){
+    public FairTopicSongLyricProcessor setNumberOfMessagesToProcess(int numberOfMessagesToProcess){
         this.numberOfMessagesToProcess=numberOfMessagesToProcess;
         return this;
     }
 
     /**
-     * new Thread(TopicConsumer).start() kicks this off...
+     * new Thread(fairTopicSongLyricProcessor).start() kicks this off...
      */
     public void run(){
         if((null==connection)||
                 (null==consumerGroupName)||
                 (null==consumerInstanceName)||
                 (null==topicName)){
-            throw new RuntimeException("\n\tTopicEntriesTopKAuditorThread---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
+            throw new RuntimeException("\n\tFairTopicSongLyricProcessor---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
         }
         try{
             ConsumerGroup consumerGroup = new ConsumerGroup(connection, this.topicName, this.consumerGroupName);
-            TopKHelper topKHelper = new TopKHelper().setTopKSize(this.topKSize).setJedis(this.connection).setTopKKeyName("TK:"+this.attributeNameToTrack+":"+this.topicName);
             long lag = 1;
             while((lag>0)||(numberOfMessagesToProcess>0)){
                 //try to consume 10 events before checking lag
@@ -79,9 +73,7 @@ public class TopicEntriesTopKAuditorThread extends Thread{
                     TopicEntry consumedMessage = consumerGroup.consume(consumerInstanceName);
                     if (!(null == consumedMessage)) {
                         System.out.println("singer" + ":" + consumedMessage.getMessage().get("singer"));
-                        String topKValue = consumedMessage.getMessage().get(this.attributeNameToTrack);
-                        topKHelper.addEntryToMyTopKKey(topKValue);
-
+                        processLyrics(consumedMessage);
                         AckMessage ack = new AckMessage(consumedMessage);
                         boolean success = false;
                         while (!success) {
@@ -94,7 +86,27 @@ public class TopicEntriesTopKAuditorThread extends Thread{
                 lag=((ConsumerGroupBase)consumerGroup).getCurrentLagForThisInstanceTopicAndGroup();
             }
         }catch(Throwable t){
-                t.printStackTrace();
+            t.printStackTrace();
         }
+    }
+
+    void processLyrics(TopicEntry consumedMessage){
+        String hashKeyName =  consumedMessage.getMessage().get("keyName");
+        String lyricKeyName = connection.hget(hashKeyName,"lyricsKey");
+        int lyricsLength = Integer.parseInt(connection.hget(hashKeyName,"lyricsLength"));
+        while(connection.zcard(lyricKeyName)<lyricsLength){
+            try{
+                Thread.sleep(50);
+                System.out.println("FairTopicSongLyricProcessor.processLyrics() waiting for all lyrics to arrive... for song: "+
+                        consumedMessage.getMessage().get("song"));
+            }catch(Throwable t){}
+        }
+        String lyrics = "";
+        java.util.List<String> lyricsList = connection.zrange(lyricKeyName,0,lyricsLength);
+        for(int x=0;x<lyricsList.size();x++){
+            lyrics+=lyricsList.get(x).split(":")[1];
+            lyrics+=" ";
+        }
+        connection.hset(hashKeyName,"lyrics",lyrics);
     }
 }

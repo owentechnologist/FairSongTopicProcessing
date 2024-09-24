@@ -18,12 +18,15 @@ import com.redislabs.sa.ot.util.*;
  * This program showcases the use of the Jedis Streams client library
  * possible args:
  * --publishnew   true/false should this program execution write new song entries?
- * --eventcount 100  int how many events to process (including new entries or audited entries)
+ * --publishthreadnum 5  how many parallel song publishers to kick off?
+ * --eventcount 100  int how many events to process per thread (including new entries or audited entries)
  * --converttofair  true/false should this program execution populate the FairTopic with songs?
  * --convertthreadnum  int how many threads to spin up that do the converting to Hashes?
  * --searchwritethreadnum in how many threads to spin up that search and write new entries to the FairTopic?
  * --convertcount   int how many entries should each search thread process before exiting?
  * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer?
+ * --processlyrics true/false should we listen to the FairTopic and process the lyrics for the songs?
+ * --processlyricsthreadcount 2 how many parallel lyrics processors to kick off?
  *
  * Example:  mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.c309.FIXME.cloud.redisFIXME.com --port 12144 --password FIXME <required-args>"
 
@@ -85,7 +88,12 @@ public class Main {
 
         boolean publishNew = Boolean.parseBoolean(getValueForArg("--publishnew"));
         if(publishNew) {
-            publishNewSongs(connection);
+            int numPublishers = 1;
+            int np = Integer.parseInt(getValueForArg("--publishthreadnum"));
+            if(np>numPublishers){numPublishers=np;}
+            for(int x=0;x<numPublishers;x++) {
+                publishNewSongs(connection);
+            }
         }
 
         boolean convertToFair = Boolean.parseBoolean(getValueForArg("--converttofair"));
@@ -113,22 +121,39 @@ public class Main {
             }
         }
 
+        boolean shouldProcesslyrics = Boolean.parseBoolean(getValueForArg("--processlyrics"));
+        if(shouldProcesslyrics) {
+            processLyrics(connection);
+        }
+
         boolean auditTopics = Boolean.parseBoolean(getValueForArg("--audittopics"));
         if(auditTopics) {
-            topicTopKAuditorOnly(connection);
+            topicTopKAuditors(connection);
         }
 
     }
 
     /**
      * Use this method to Consume and Process the events in the Fair Topic
+     * In this implementation the processing involves capturring lyrics in the correct order
+     * from a SortedSet and adding them to a Hash object that contains the rest of the song
+     * details
+     *
      * @param args
      * @param connection
      * @throws Throwable
      */
-    public static void consumeFromFairTopic(JedisPooled connection)throws Throwable{
-        //being that this is a demo...
-        // as long as we use the auditing method - we don't really need to process anything
+    public static void processLyrics(JedisPooled connection)throws Throwable{
+        int numberOfLyricProcessorThreads = Integer.parseInt(getValueForArg("--processlyricsthreadcount"));
+        for(int x=0;x<numberOfLyricProcessorThreads;x++){
+            FairTopicSongLyricProcessor ftslp = new FairTopicSongLyricProcessor().
+                    setTopicName(READY_FOR_FAIR_PROCESSING_TOPIC_NAME).
+                    setJedisPooledConnection(connection).
+                    setConsumerGroupName("LyricsProcessorConsumerGroup").
+                    setConsumerInstanceName("lp:"+x).
+                    setNumberOfMessagesToProcess(Integer.parseInt(getValueForArg("--eventcount")));
+            new Thread(ftslp).start();
+        }
     }
 
     /**
@@ -150,7 +175,10 @@ public class Main {
         TopicManager manager = TopicManager.createTopic(connection, config);
         int howManySongEvents = Integer.parseInt(getValueForArg("--eventcount"));
         TopicProducer producer = new TopicProducer(connection,INBOUND_TOPIC_NAME);
-        NewSongEventWriter nsew = new NewSongEventWriter().setTopicProducer(producer).setHowManySongEventsToWrite(howManySongEvents).setSleepMillisBetweenWrites(100);
+        NewSongEventWriter nsew = new NewSongEventWriter().setTopicProducer(producer)
+                .setHowManySongEventsToWrite(howManySongEvents)
+                .setSleepMillisBetweenWrites(50)
+                .setJedisPooled(connection);
         new Thread(nsew).start();
     }
 
@@ -159,7 +187,7 @@ public class Main {
      * INBOUND and FAIR
      * @param args
      */
-    public static void topicTopKAuditorOnly(JedisPooled connection){
+    public static void topicTopKAuditors(JedisPooled connection){
         int howManySongEvents=Integer.parseInt(getValueForArg("--eventcount"));
         //This next section uses the TopicConsumerThread to log TopK counts of message Attributes seen:
         //track singers added to FAIR TOPIC_NAME:

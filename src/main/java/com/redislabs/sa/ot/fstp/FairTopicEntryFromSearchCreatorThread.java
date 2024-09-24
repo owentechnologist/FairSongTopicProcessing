@@ -57,7 +57,7 @@ public class FairTopicEntryFromSearchCreatorThread extends Thread{
         if((null==connection)||(null==searchIndexName)||
                 (null==READY_FOR_FAIR_PROCESSING_TOPIC_NAME)||
                 (null==DEDUP_PROCESSING_TARGET_KEY_NAME)){
-            throw new RuntimeException("\n\t---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
+            throw new RuntimeException("\n\tFairTopicEntryFromSearchCreatorThread---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
         }
         try {
             searchAndAddToFairProcessingTopic();

@@ -5,6 +5,10 @@ import net.datafaker.*;
 
 import com.redislabs.sa.ot.util.TSWrappedTopicProducer;
 import com.redis.streams.*;
+import java.util.Random;
+import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.Pipeline;
+
 import com.redis.streams.command.serial.*;
 import com.redis.streams.exception.InvalidMessageException;
 import com.redis.streams.exception.InvalidTopicException;
@@ -19,6 +23,8 @@ import java.util.Map;
  */
 public class NewSongEventWriter extends Thread{
     TopicProducer topicProducer = null;
+    Random nsewRandom = new Random();
+    JedisPooled connection = null;
     Integer howManySongEvents = null;
     Integer sleepMillis = null;
     Faker faker = new Faker();
@@ -41,10 +47,15 @@ public class NewSongEventWriter extends Thread{
         this.sleepMillis=new Integer(sleepMillisBetweenWrites);
         return this;
     }
+    public NewSongEventWriter setJedisPooled(JedisPooled connection){
+        this.connection = connection;
+        return this;
+    }
 
     public void run(){
         if((null==topicProducer)||
-                (null==howManySongEvents)||(null==sleepMillis)){
+                (null==howManySongEvents)||(null==sleepMillis)
+                ||(null==connection)){
             throw new RuntimeException("\n\t---> MISSING PROPERTIES - you must set all properties before starting this Thread.");
         }
         for (int x = 0; x < howManySongEvents; x++) {
@@ -86,12 +97,36 @@ public class NewSongEventWriter extends Thread{
         String titan = this.faker.ancient().titan();//roughly 34 of these
         String albumName = singerName+" presents "+buzzWord+" "+loveType;//~100 of these per singer
         String song = titan+" "+foodName;
-        String lyrics = loveType+" "+this.faker.food().spice()+" "+loveType+" "+this.faker.text().text(30,2000);
+        String lyricsKey = "Z:"+singerName+":"+albumName+":"+song;
+        int lyricsLength = writeLyrics(lyricsKey,loveType);
         String releaseDate = "139"+(1924967499+((10000000*(System.nanoTime()%1000))));
         TSWrappedTopicProducer wrappedProducer = new TSWrappedTopicProducer().setTopicProducer(producer).
                 setInterestingAttributeNameForEntries("singer").
                 setSharedTSLabel("inbound_events");
-        wrappedProducer.produceWithTSLog(Map.of("album",albumName,"singer",singerName,"song",song,"lyrics",lyrics,"releaseDate",releaseDate));
-//      producer.produce(Map.of("album",albumName,"singer",singerName,"song",song,"lyrics",lyrics,"releaseDate",releaseDate));
+        wrappedProducer.produceWithTSLog(Map.of("album",albumName,"singer",singerName,"song",song,"lyricsKey",lyricsKey,"lyricsLength",lyricsLength+"","releaseDate",releaseDate));
+
+        //producer.produce(Map.of("album",albumName,"singer",singerName,"song",song,"lyricsKey",lyricsKey,"lyricsLength",lyricsLength,"releaseDate",releaseDate));
+    }
+
+    int writeLyrics(String lyricsKey,String loveType){
+        String lyrics = loveType+this.faker.food().spice()+" "+loveType.trim();
+        int songLength = Math.abs((20)+nsewRandom.nextInt(5000));
+        for(int l = 0;l<songLength;l++) {
+            lyrics += (" " + this.faker.hacker().adjective());
+            lyrics += (" " + this.faker.mood().feeling());
+            lyrics += (" " + this.faker.animal().name());
+            lyrics += (" " + this.faker.country().name());
+            lyrics += (" " + loveType.trim());
+        }
+        lyrics="__BEGIN__ "+lyrics+" __END__";
+        String[] songLyrics = lyrics.split(" ");
+        int lyricsLength = songLyrics.length;
+        Pipeline pipe = connection.pipelined();
+        for(int x=0;x<songLyrics.length;x++){
+            pipe.zadd(lyricsKey,x,x+":"+songLyrics[x]);
+        }
+        pipe.sync();
+        pipe.close();
+        return lyricsLength;
     }
 }
