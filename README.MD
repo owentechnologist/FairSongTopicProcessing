@@ -2,15 +2,22 @@ This project demonstrates using Redis Streams and Search and SortedSets to solve
 
 This project also uses the TimeSeries and TopK datatypes to track the arrival time, processing rate, and count for each singer grouping.
 
+### A workflow diagram that steps through the life cycle of the song processing:
+
+![image info](./fairsongprocessingworkflow.png)
+
 ## Thoughts on Fairness
 
 This solution focuses on a push model where the incoming songs drive the processing rate.
 
-Behind the scenes, the rate at which the incoming songs arrive is influenced by 
+Behind the scenes, the rate at which the incoming songs arrive is influenced by ??
 
 * Notice that in this screenshot there are several instances of Sting and Alicia Keys having 3 and 2 songs published in the same 500 millis time window:
 
 ![image info](./inbound_events.png)
+
+#### here is a query that reveals the rate of inbound tasks being added to the system for Sting and Elvis:
+
 ```
 TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=inbound_events uid=(Elvis,Sting) GROUPBY uid reduce avg
 ```
@@ -35,6 +42,8 @@ NB: These keys only get generated when you pass --converttofair true
 Success!  a more fair distribution of the incoming songs!
 
 ![image info](./fair_events.png)
+
+#### here is a query that reveals the rate of fair tasks being added to the system for Sting and Elvis:
 
 ```
 TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=fair_events uid=(Elvis,Sting) GROUPBY uid reduce avg
@@ -91,13 +100,14 @@ This example includes a Java library that enables the Topic abstraction.
  * --searchwritethreadnum in how many threads to spin up that search and write new entries to the FairTopic?
  * --convertcount   int how many entries should each search thread process before exiting?
  * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer? 
- *
+ * --processlyricsthreadcount 2 how many threads to spin up to process lyrics 
+ * --processlyrics true true/false should this program process lyrics - adding them to song Records?
 ```
 
 * Example start command to execute Producing songs, converting them, and making them visible in the FairTopic:
 
 ```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --publishnew true --converttofair true --convertcount 1000 --audittopics false --convertthreadnum 10 --searchwritethreadnum 1 --eventcount 1000"
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --publishnew true --converttofair true --convertcount 25 --audittopics false --convertthreadnum 4 --searchwritethreadnum 2 --eventcount 20 --publishthreadnum 5 --processlyricsthreadcount 2 --processlyrics true"
 ```
 This ^ sort of run is pretty noisy, as all the operations happen in the same VM and the shell gets to be full of activity reported by the various Threads...
 
@@ -105,10 +115,11 @@ It is also possible to execute the program multiple times in separate VMs - the 
 1. Produce new songs
 2. Convert them into searchable Hashes 
 3. Populate the FairTopic
-4. Audit the count of songs seen in Inbound and Fair topics
+4. Process the lyrics   
+5. (optional) Audit the count of songs seen in Inbound and Fair topics
 
 
-Note that throttling is not enabled yet as the Fairness behavior is harder to spot if some songs are throttled and therefore never get added to the FairTopic
+Note that (as of Sept 24th 2024) throttling is not enabled yet as the Fairness behavior is harder to spot if some songs are throttled and therefore never get added to the FairTopic
 
 You can confirm if there are any Throttled songs by executing the following search query in RedisInsight:
 
@@ -116,8 +127,6 @@ You can confirm if there are any Throttled songs by executing the following sear
 ```
 FT.SEARCH idx_songs "@isThrottled:{true}" return 2 singer album
 ```
-
-![image info](./fairsongprocessingworkflow.png)
 
 
 * Example with all required args publishing only new Song entries:
