@@ -117,7 +117,7 @@ You can confirm if there are any Throttled songs by executing the following sear
 FT.SEARCH idx_songs "@isThrottled:{true}" return 2 singer album
 ```
 
-![image info](./FairSongProcessingWorkflow.png)
+![image info](./fairsongprocessingworkflow.png)
 
 
 * Example with all required args publishing only new Song entries:
