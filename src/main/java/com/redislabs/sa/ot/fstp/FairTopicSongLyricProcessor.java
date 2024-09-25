@@ -90,6 +90,11 @@ public class FairTopicSongLyricProcessor extends Thread{
         }
     }
 
+    /**
+     * In a future version only a subset of the lyrics will be processed at a time
+     * For now - all lyrics are processed (added to the SongRecord)
+     * @param consumedMessage
+     */
     void processLyrics(TopicEntry consumedMessage){
         String hashKeyName =  consumedMessage.getMessage().get("keyName");
         String lyricKeyName = connection.hget(hashKeyName,"lyricsKey");
@@ -108,5 +113,6 @@ public class FairTopicSongLyricProcessor extends Thread{
             lyrics+=" ";
         }
         connection.hset(hashKeyName,"lyrics",lyrics);
+        connection.del(lyricKeyName);
     }
 }
