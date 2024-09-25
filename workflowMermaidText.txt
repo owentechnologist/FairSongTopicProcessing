@@ -1,0 +1,27 @@
+sequenceDiagram
+    actor NewSongEventWriter
+    actor InboundSongTopicProcessor
+    actor FairTopicEntryFromSearchCreator
+    actor FairTopicSongLyricProcessor
+    NewSongEventWriter-->>InboundTopic: publish initial entry kick off life cycle
+    activate NewSongEventWriter
+    NewSongEventWriter-->>LyricsKey: add lyrics to LyricsKey
+    InboundSongTopicProcessor-->>InboundTopic: process entry by converting it to a SongRecord & set defaults
+    activate InboundSongTopicProcessor
+    InboundSongTopicProcessor-->>SongRecord: Populate Record with known data
+    InboundSongTopicProcessor-->>InboundTopic: Ack entry so it is not processed by another consumer
+    deactivate InboundSongTopicProcessor
+    FairTopicEntryFromSearchCreator-->>idx_songs: Search for 30 oldest song records not throttled and not yet queued
+    activate FairTopicEntryFromSearchCreator
+    FairTopicEntryFromSearchCreator-->>DedupSongZSet: check for duplicate songs for last 5 min
+    FairTopicEntryFromSearchCreator-->>RateLimitZSingerSet: delay same singer from last 1 sec
+    FairTopicEntryFromSearchCreator-->>SongRecord: set status isQueued true
+    FairTopicEntryFromSearchCreator-->>FairTopic: publish entry/fairTask with SongRecord keyname
+    deactivate FairTopicEntryFromSearchCreator
+    FairTopicSongLyricProcessor-->FairTopic: consume next entry and use data in SongRecord to process songLyrics
+    activate FairTopicSongLyricProcessor
+    NewSongEventWriter-->>LyricsKey: add lyrics to LyricsKey (could take a while)
+    deactivate NewSongEventWriter
+    FairTopicSongLyricProcessor-->LyricsKey: process lyrics (writing total set to SongRecord)
+    FairTopicSongLyricProcessor-->FairTopic: ack entry so it is not processed by another consumer
+    deactivate FairTopicSongLyricProcessor
