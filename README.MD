@@ -1,6 +1,12 @@
-This project demonstrates using Redis Streams and Search and SortedSets to solve the problem of fairly processing events across a range of groupings.
+## This project demonstrates using Redis Streams and Search and SortedSets to solve the problem of fairly processing events across a range of groupings.
 
-This project also uses the TimeSeries and TopK datatypes to track the arrival time, processing rate, and count for each singer grouping.
+### Note that by:
+### * using Streams, all the worker processing is recoverable and scalable and durable
+### * using search, variable filters can be chosen to enable future processing decisions based on isThrottled, or isTombstoned, releaseDate or whatever attributes prove useful
+### * using timeSeries, it is easy to see the impact of the rate limiting and filtering in the effort to establish fairness
+
+
+This project also (somewhat frivolously) uses the TopK datatype to track the count for each singer grouping.
 
 ### A workflow diagram that steps through the life cycle of the song processing:
 
@@ -9,10 +15,12 @@ This project also uses the TimeSeries and TopK datatypes to track the arrival ti
 ## Thoughts on Fairness
 
 This solution focuses on a push model where the incoming songs drive the processing rate.
+Behind the scenes, the rate at which the incoming songs arrive is influenced by unknown forces.  (the arguments you provide to this program)
 
-Behind the scenes, the rate at which the incoming songs arrive is influenced by ??
+By looking at the same singer-related tasks arrival times and frequency in both the Inbound and Fair Topics, you can see the impact of the patterns employed by this solution.
 
-* Notice that in this screenshot there are several instances of Sting and Alicia Keys having 3 and 2 songs published in the same 500 millis time window:
+* This first screenshot shows several instances of Sting and Alicia Keys having 3 and 2 songs published in the same 500 millis time window:  
+<em>a bit further down in this document you will see the same query against the FairTopic for Sting and Alicia Keys</em>
 
 ![image info](./inbound_events.png)
 
@@ -104,7 +112,7 @@ This example includes a Java library that enables the Topic abstraction.
  * --processlyrics true true/false should this program process lyrics - adding them to song Records?
 ```
 
-* Example start command to execute Producing songs, converting them, and making them visible in the FairTopic:
+* Example start command to Produce song entries, convert them to records, make them visible in the FairTopic and  have the lyrics processed:
 
 ```
 mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --publishnew true --converttofair true --convertcount 25 --audittopics false --convertthreadnum 4 --searchwritethreadnum 2 --eventcount 20 --publishthreadnum 5 --processlyricsthreadcount 2 --processlyrics true"
@@ -119,29 +127,6 @@ It is also possible to execute the program multiple times in separate VMs - the 
 5. (optional) Audit the count of songs seen in Inbound and Fair topics
 
 
-Note that (as of Sept 24th 2024) throttling is not enabled yet as the Fairness behavior is harder to spot if some songs are throttled and therefore never get added to the FairTopic
-
-You can confirm if there are any Throttled songs by executing the following search query in RedisInsight:
-
-
-```
-FT.SEARCH idx_songs "@isThrottled:{true}" return 2 singer album
-```
-
-
-* Example with all required args publishing only new Song entries:
-```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --converttofair false --audittopics false --publishnew true --eventcount 1500"
-```
-* Example with all required args converting Song entries to FairEntries:
-```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --audittopics false --publishnew false --converttofair true --convertthreadnum 10 --searchwritethreadnum 1 --convertcount 1500"
-```
-* Example with all required args producing topK results from INBOUND and FAIR Topics:
-```
-mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.com --port 0000 --password FIXME --publishnew false --converttofair false --audittopics true --eventcount 1500"
-```
-
 * It is expected that the Search module is enabled and the following index has been created...
 * Execute the following from redis-cli / redisInsight to create the necessary index:
 ```
@@ -152,11 +137,17 @@ You can run your own search queries to see what is in the data:
 ```
 FT.AGGREGATE idx_songs "@isQueued:{false} @isThrottled:{false} @isTombstoned:{false}" LOAD 2 @__key @TimeOfArrival GROUPBY 3 @__key @singer @album REDUCE MAX 1 TimeOfArrival AS TOA SORTBY 2 @TOA ASC LIMIT 0 10 DIALECT 2
 ```
+You can confirm if there are any Throttled songs by executing the following search query in RedisInsight:
+
+```
+FT.SEARCH idx_songs "@isThrottled:{true}" return 2 singer album
+```
+<em>Note that (as of Sept 24th 2024) throttling is not enabled yet. Feel free to manually edit one of the Song records isThrottled attributes and you will see the impact on the search query...</em>
 
 
 Note that to build this project you need to add the necessary jar to your local mvn repo:
 
-This will not be necessary once this libray is available publicly through mvn 
+This will not be necessary once this libray is available publicly through mvn (expected in late 2024)
 
 ``` 
 mvn org.apache.maven.plugins:maven-install-plugin:2.5.2:install-file -Dfile=redis-streams-java-0.3.1.2.jar
