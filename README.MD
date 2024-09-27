@@ -8,6 +8,12 @@
 
 This project also (somewhat frivolously) uses the TopK datatype to track the count for each singer grouping.
 
+### A simple diagram that steps through the life cycle of the song processing:
+
+![image info](./fairsongsimpleworkflow.png)
+
+
+
 ### A workflow diagram that steps through the life cycle of the song processing:
 
 ![image info](./fairsongprocessingworkflow.png)
