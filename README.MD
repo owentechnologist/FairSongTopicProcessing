@@ -136,18 +136,28 @@ It is also possible to execute the program multiple times in separate VMs - the 
 * It is expected that the Search module is enabled and the following index has been created...
 * Execute the following from redis-cli / redisInsight to create the necessary index:
 ```
-FT.CREATE idx_songs prefix 1 song SCHEMA singer TAG SORTABLE album TAG SORTABLE isTombstoned TAG isQueued TAG isThrottled TAG TimeOfArrival NUMERIC SORTABLE
+FT.CREATE idx_songs prefix 1 song SCHEMA singer TAG SORTABLE album TAG SORTABLE isTombstoned TAG isQueued TAG isThrottled TAG TimeOfArrival NUMERIC SORTABLE lyricsLength NUMERIC SORTABLE
 ```
 
 You can run your own search queries to see what is in the data:
+
+
+You can find the lyricsKey with the longest lyrics:
+
 ```
-FT.AGGREGATE idx_songs "@isQueued:{false} @isThrottled:{false} @isTombstoned:{false}" LOAD 2 @__key @TimeOfArrival GROUPBY 3 @__key @singer @album REDUCE MAX 1 TimeOfArrival AS TOA SORTBY 2 @TOA ASC LIMIT 0 10 DIALECT 2
+FT.AGGREGATE idx_songs * LOAD 3 @lyricsKey AS Key GROUPBY 0 REDUCE FIRST_VALUE 4 @Key BY @lyricsLength DESC
+```
+
+You can emulate/adjust the logic of the SearchWorker that produces fairly ordered tasks:
+```
+FT.AGGREGATE idx_songs "@isQueued:{false} @isThrottled:{false} @isTombstoned:{false}" LOAD 2 @__key @TimeOfArrival GROUPBY 3 @__key @singer @album REDUCE MAX 1 TimeOfArrival AS TOA SORTBY 2 @TOA ASC LIMIT 0 10
 ```
 You can confirm if there are any Throttled songs by executing the following search query in RedisInsight:
 
 ```
 FT.SEARCH idx_songs "@isThrottled:{true}" return 2 singer album
 ```
+
 <em>Note that (as of Sept 24th 2024) throttling is not enabled yet. Feel free to manually edit one of the Song records isThrottled attributes and you will see the impact on the search query...</em>
 
 
