@@ -33,21 +33,21 @@ By looking at the same singer-related tasks arrival times and frequency in both 
 #### here is a query that reveals the rate of inbound tasks being added to the system for Sting and Elvis:
 
 ```
-TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=inbound_events uid=(Elvis,Sting) GROUPBY uid reduce avg
+TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=inbound_events uid=(Elvis,Sting) GROUPBY uid reduce sum
 ```
 
 * the following queries target the inbound_events data (these keys are created when you publish/produce entries):
 
 ```
-TS.MRANGE - + AGGREGATION count 60000 FILTER sharedlabel=inbound_events GROUPBY uid reduce avg
+TS.MRANGE - + AGGREGATION count 60000 FILTER sharedlabel=inbound_events GROUPBY uid reduce sum
 ```
 
 ```
-TS.MRANGE - + AGGREGATION count 6000 FILTER sharedlabel=inbound_events GROUPBY uid reduce avg
+TS.MRANGE - + AGGREGATION count 6000 FILTER sharedlabel=inbound_events GROUPBY uid reduce sum
 ```
 
 ```
-TS.MRANGE - + AGGREGATION count 1000 FILTER sharedlabel=inbound_events GROUPBY uid reduce avg
+TS.MRANGE - + AGGREGATION count 1000 FILTER sharedlabel=inbound_events GROUPBY uid reduce sum
 ```
 * here are some queries for the TimeSeries datatype:
 NB: These keys only get generated when you pass --converttofair true
@@ -60,19 +60,19 @@ Success!  a more fair distribution of the incoming songs!
 #### here is a query that reveals the rate of fair tasks being added to the system for Sting and Elvis:
 
 ```
-TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=fair_events uid=(Elvis,Sting) GROUPBY uid reduce avg
+TS.MRANGE - + AGGREGATION count 500 FILTER sharedlabel=fair_events uid=(Elvis,Sting) GROUPBY uid reduce sum
 ```
 
 ```
-TS.MRANGE - + AGGREGATION count 60000 FILTER sharedlabel=fair_events GROUPBY uid reduce avg
+TS.MRANGE - + AGGREGATION count 60000 FILTER sharedlabel=fair_events GROUPBY uid reduce sum
 ```
 
 ```
-TS.MRANGE - + AGGREGATION count 6000 FILTER sharedlabel=fair_events GROUPBY uid reduce avg
+TS.MRANGE - + AGGREGATION count 6000 FILTER sharedlabel=fair_events GROUPBY uid reduce sum
 ```
 
 ```
-TS.MRANGE - + AGGREGATION count 1000 FILTER sharedlabel=fair_events GROUPBY uid reduce avg
+TS.MRANGE - + AGGREGATION count 1000 FILTER sharedlabel=fair_events GROUPBY uid reduce sum
 ```
 
 * and here are queries against the TopK datatype:
@@ -116,6 +116,7 @@ This example includes a Java library that enables the Topic abstraction.
  * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer? 
  * --processlyricsthreadcount 2 how many threads to spin up to process lyrics 
  * --processlyrics true true/false should this program process lyrics - adding them to song Records?
+ * --latencymultiple int how many 10 millis to apply to sleep calls
 ```
 
 * Example start command to Produce song entries, convert them to records, make them visible in the FairTopic and  have the lyrics processed:
@@ -150,7 +151,7 @@ FT.AGGREGATE idx_songs * LOAD 3 @lyricsKey AS Key GROUPBY 0 REDUCE FIRST_VALUE 4
 
 You can emulate/adjust the logic of the SearchWorker that produces fairly ordered tasks:
 ```
-FT.AGGREGATE idx_songs "@isQueued:{false} @isThrottled:{false} @isTombstoned:{false}" LOAD 2 @__key @TimeOfArrival GROUPBY 3 @__key @singer @album REDUCE MAX 1 TimeOfArrival AS TOA SORTBY 2 @TOA ASC LIMIT 0 10
+FT.AGGREGATE idx_songs "@isQueued:{false} @isThrottled:{false} @isTombstoned:{false}" LOAD 2 @__key @TimeOfArrival GROUPBY 3 @__key @singer @album REDUCE MIN 1 TimeOfArrival AS TOA SORTBY 2 @TOA ASC LIMIT 0 10
 ```
 You can confirm if there are any Throttled songs by executing the following search query in RedisInsight:
 
@@ -159,12 +160,3 @@ FT.SEARCH idx_songs "@isThrottled:{true}" return 2 singer album
 ```
 
 <em>Note that (as of Sept 24th 2024) throttling is not enabled yet. Feel free to manually edit one of the Song records isThrottled attributes and you will see the impact on the search query...</em>
-
-
-Note that to build this project you need to add the necessary jar to your local mvn repo:
-
-This will not be necessary once this libray is available publicly through mvn (expected in late 2024)
-
-``` 
-mvn org.apache.maven.plugins:maven-install-plugin:2.5.2:install-file -Dfile=redis-streams-java-0.3.1.2.jar
-```

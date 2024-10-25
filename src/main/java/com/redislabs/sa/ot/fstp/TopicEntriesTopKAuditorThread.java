@@ -2,7 +2,7 @@ package com.redislabs.sa.ot.fstp;
 
 import com.redislabs.sa.ot.util.*;
 import redis.clients.jedis.*;
-
+import java.util.logging.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -16,6 +16,7 @@ import java.util.Map;
 
 public class TopicEntriesTopKAuditorThread extends Thread{
 
+    static Logger logger = Logger.getLogger("com.redislabs.sa.ot.fstp.TopicEntriesTopKAuditorThread");
     String topicName;
     String consumerGroupName;
     String consumerInstanceName;

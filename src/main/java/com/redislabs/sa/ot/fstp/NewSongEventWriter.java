@@ -15,6 +15,7 @@ import com.redis.streams.exception.InvalidTopicException;
 import com.redis.streams.exception.ProducerTimeoutException;
 import com.redis.streams.exception.TopicNotFoundException;
 import java.util.Map;
+import java.util.logging.*;
 
 /**
  *  * There will always be at most 15 singers,
@@ -22,6 +23,8 @@ import java.util.Map;
  *  * and at most 1,000 songs per album.
  */
 public class NewSongEventWriter extends Thread{
+
+    static Logger logger = Logger.getLogger("com.redislabs.sa.ot.fstp.NewSongEventWriter");
     TopicProducer topicProducer = null;
     Random nsewRandom = new Random();
     JedisPooled connection = null;

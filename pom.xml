@@ -35,24 +35,20 @@
             <type>jar</type>
             <scope>compile</scope>
         </dependency>
-        <!-- circuit breaker / failover -->
         <dependency>
-            <groupId>io.github.resilience4j</groupId>
-            <artifactId>resilience4j-all</artifactId>
-            <version>1.7.1</version>
-            <optional>true</optional>
+            <groupId>com.redis</groupId>
+            <artifactId>redis-streams-java</artifactId>
+            <version>0.3.5</version>
         </dependency>
         <dependency>
-            <groupId>io.github.resilience4j</groupId>
-            <artifactId>resilience4j-circuitbreaker</artifactId>
-            <version>1.7.1</version>
-            <optional>true</optional>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.5</version>
         </dependency>
         <dependency>
-            <groupId>io.github.resilience4j</groupId>
-            <artifactId>resilience4j-retry</artifactId>
-            <version>1.7.1</version>
-            <optional>true</optional>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.6.4</version>
         </dependency>
     </dependencies>
 

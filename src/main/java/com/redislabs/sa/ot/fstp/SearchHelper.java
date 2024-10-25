@@ -1,5 +1,6 @@
 package com.redislabs.sa.ot.fstp;
 
+import java.util.logging.*;
 import redis.clients.jedis.search.*;
 import redis.clients.jedis.search.FieldName;
 import redis.clients.jedis.search.aggr.*;
@@ -11,6 +12,8 @@ public class SearchHelper{
     ArrayList<String> groupByFields = new ArrayList<>();
     ArrayList<Reducer> reducerCollection = new ArrayList<>();
     String queryGuts = "";
+    static Logger logger = Logger.getLogger("com.redislabs.sa.ot.fstp.SearchHelper");
+
     /**
      * Search query looks like this:
      * FT.AGGREGATE idx_songs "@isQueued:{false} @isThrottled:{false} @isTombstoned:{false}"
@@ -48,7 +51,7 @@ public class SearchHelper{
                 isNoResult=true;
             }catch(Throwable t){t.printStackTrace();}
             if(isNoResult){
-                System.out.println(s+"  No results this time... is there data in Redis?");
+                logger.fine(s+"  No results this time... is there data in Redis?");
             }else{
                 throw new RuntimeException("\n\nSEARCH INDEX MISSING!\nYou must create the index using: \n"+
                         "\"FT.CREATE idx_songs prefix 1 song SCHEMA singer TAG SORTABLE album TAG SORTABLE isTombstoned TAG isQueued TAG isThrottled TAG TimeOfArrival NUMERIC SORTABLE\""+
@@ -64,7 +67,7 @@ public class SearchHelper{
             }
         }
         if(hashKeyNamesList.size()>0){
-            System.out.println("\nSearch took "+(System.currentTimeMillis()-startTime)+" millis... Result: sample keyname == "+hashKeyNamesList.get(0));
+            logger.fine("\nSearch took "+(System.currentTimeMillis()-startTime)+" millis... Result: sample keyname == "+hashKeyNamesList.get(0));
         }
         return hashKeyNamesList;
     }

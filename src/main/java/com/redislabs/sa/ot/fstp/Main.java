@@ -1,7 +1,7 @@
 package com.redislabs.sa.ot.fstp;
 
 import redis.clients.jedis.*;
-
+import java.util.logging.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -27,6 +27,7 @@ import com.redislabs.sa.ot.util.*;
  * --audittopics  true/false should thie program execution create topK entries showing entry counts by singer?
  * --processlyrics true/false should we listen to the FairTopic and process the lyrics for the songs?
  * --processlyricsthreadcount 2 how many parallel lyrics processors to kick off?
+ * --latencymultiple int how many multiples of 10 millis to delay greedy sequential channels
  *
  * Example:  mvn compile exec:java -Dexec.cleanupDaemonThreads=false -Dexec.args="--host redis-FIXME.c309.FIXME.cloud.redisFIXME.com --port 12144 --password FIXME <required-args>"
 
@@ -61,6 +62,8 @@ public class Main {
     static String CF_PROCESSING_TARGET_KEY_NAME = "CF:ProcessingTargetFilter";
     static String SEARCH_IDX = "idx_songs";
     static ArrayList<String> argList = null;
+    static int sleepDefault = 10;//this is modified by --latencymultiple use bigger numbers for slow systems
+    static boolean isVerbose = true;
 
     /**
      * In this version, Messages will be ack'd when they are dupes or
@@ -85,6 +88,7 @@ public class Main {
         JedisPooled connection = JedisPooledHelper.getJedisPooledFromArgs(args);
         System.out.println("BEGIN TEST (RESPONSE TO PING) -->   " + connection.ping());
         long startTime = System.currentTimeMillis();
+        sleepDefault=10*Integer.parseInt(getValueForArg("--latencymultiple"));
 
         boolean publishNew = Boolean.parseBoolean(getValueForArg("--publishnew"));
         if(publishNew) {
@@ -116,7 +120,8 @@ public class Main {
                         setNumberOfEntriesToConsumePerThread(Integer.parseInt(getValueForArg("--convertcount"))).
                         setReadyForFairProcessingTopicName(READY_FOR_FAIR_PROCESSING_TOPIC_NAME).
                         setDedupProcessingTargetKeyName(CF_PROCESSING_TARGET_KEY_NAME).
-                        setSearchIndexName(SEARCH_IDX);
+                        setSearchIndexName(SEARCH_IDX).
+                        setSleepDefault(sleepDefault);
                 new Thread(ftefsct).start();
             }
         }
@@ -151,6 +156,7 @@ public class Main {
                     setJedisPooledConnection(connection).
                     setConsumerGroupName("LyricsProcessorConsumerGroup").
                     setConsumerInstanceName("lp:"+x).
+                    setSleepTime(sleepDefault).
                     setNumberOfMessagesToProcess(Integer.parseInt(getValueForArg("--eventcount")));
             new Thread(ftslp).start();
         }
@@ -177,7 +183,7 @@ public class Main {
         TopicProducer producer = new TopicProducer(connection,INBOUND_TOPIC_NAME);
         NewSongEventWriter nsew = new NewSongEventWriter().setTopicProducer(producer)
                 .setHowManySongEventsToWrite(howManySongEvents)
-                .setSleepMillisBetweenWrites(50)
+                .setSleepMillisBetweenWrites(sleepDefault)
                 .setJedisPooled(connection);
         new Thread(nsew).start();
     }

@@ -2,6 +2,7 @@ package com.redislabs.sa.ot.fstp;
 
 import com.redislabs.sa.ot.util.*;
 import redis.clients.jedis.*;
+import java.util.logging.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,7 +22,9 @@ public class FairTopicSongLyricProcessor extends Thread{
     String consumerInstanceName;
     String attributeNameToTrack;
     JedisPooled connection;
+    int sleepTime;
     int numberOfMessagesToProcess=1;
+    static Logger logger = Logger.getLogger("com.redislabs.sa.ot.fstp.FairTopicSongLyricProcessor");
 
 
     public FairTopicSongLyricProcessor setJedisPooledConnection(JedisPooled connection){
@@ -49,6 +52,11 @@ public class FairTopicSongLyricProcessor extends Thread{
         return this;
     }
 
+    public FairTopicSongLyricProcessor setSleepTime(int sleeptime){
+        this.sleepTime=sleeptime;
+        return this;
+    }
+
     public FairTopicSongLyricProcessor setNumberOfMessagesToProcess(int numberOfMessagesToProcess){
         this.numberOfMessagesToProcess=numberOfMessagesToProcess;
         return this;
@@ -72,13 +80,13 @@ public class FairTopicSongLyricProcessor extends Thread{
                 for(int l=0;l<10;l++){
                     TopicEntry consumedMessage = consumerGroup.consume(consumerInstanceName);
                     if (!(null == consumedMessage)) {
-                        System.out.println("singer" + ":" + consumedMessage.getMessage().get("singer"));
+                        logger.fine("singer" + ":" + consumedMessage.getMessage().get("singer"));
                         processLyrics(consumedMessage);
                         AckMessage ack = new AckMessage(consumedMessage);
                         boolean success = false;
                         while (!success) {
                             success = consumerGroup.acknowledge(ack);
-                            Thread.sleep(100);//wait between tries
+                            Thread.sleep(sleepTime);//wait between tries
                             numberOfMessagesToProcess--;
                         }
                     }
@@ -101,8 +109,8 @@ public class FairTopicSongLyricProcessor extends Thread{
         int lyricsLength = Integer.parseInt(connection.hget(hashKeyName,"lyricsLength"));
         while(connection.zcard(lyricKeyName)<lyricsLength){
             try{
-                Thread.sleep(50);
-                System.out.println("FairTopicSongLyricProcessor.processLyrics() waiting for all lyrics to arrive... for song: "+
+                Thread.sleep(sleepTime);
+                logger.fine("FairTopicSongLyricProcessor.processLyrics() waiting for all lyrics to arrive... for song: "+
                         consumedMessage.getMessage().get("song"));
             }catch(Throwable t){}
         }

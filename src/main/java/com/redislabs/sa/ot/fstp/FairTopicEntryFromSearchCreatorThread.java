@@ -1,6 +1,7 @@
 package com.redislabs.sa.ot.fstp;
 
 import redis.clients.jedis.*;
+import java.util.logging.*;
 import com.redis.streams.*;
 import com.redis.streams.command.serial.*;
 import com.redis.streams.exception.InvalidMessageException;
@@ -22,6 +23,8 @@ public class FairTopicEntryFromSearchCreatorThread extends Thread{
     String searchIndexName = null;
     JedisPooled connection = null;
     int numberOfEntriesToConsume = 0;
+    int sleepmillis = 10;
+    static Logger logger = Logger.getLogger("com.redislabs.sa.ot.fstp.FairTopicEntryFromSearchCreatorThread");
 
 
     public FairTopicEntryFromSearchCreatorThread setSearchIndexName(String searchIndexName){
@@ -41,6 +44,11 @@ public class FairTopicEntryFromSearchCreatorThread extends Thread{
 
     public FairTopicEntryFromSearchCreatorThread setNumberOfEntriesToConsumePerThread(int numberOfEntriesToConsumePerThread){
         this.numberOfEntriesToConsume=numberOfEntriesToConsumePerThread;
+        return this;
+    }
+
+    public FairTopicEntryFromSearchCreatorThread setSleepDefault(int sleepDefault){
+        this.sleepmillis=sleepDefault;
         return this;
     }
 
@@ -105,11 +113,11 @@ public class FairTopicEntryFromSearchCreatorThread extends Thread{
             int retryCount = 10; //retry 10 times to allow time for new entries to arrive
             while ((entityExists) && (retryCount > 0)) {
                 try{
-                    Thread.sleep(50);
+                    Thread.sleep(sleepmillis);
                 }catch(Throwable t){}
                 hashKeyNamesToProcessNext = searcher.performSearchGetResultHashKey(connection, searchIndexName, numberOfPossibleResults);
                 resultLength = hashKeyNamesToProcessNext.size();
-                System.out.println("Debug FairsearchCreator... hashKeyNamesToProcessNext.size();== "+resultLength);
+                logger.fine("Debug FairsearchCreator... hashKeyNamesToProcessNext.size();== "+resultLength);
                 //dedup the song_album_singer using SortedSet with 5 min window (300 seconds:
                 //randomly choose from the results to limit collisions with other threads:
                 if(resultLength>0){
@@ -117,7 +125,7 @@ public class FairTopicEntryFromSearchCreatorThread extends Thread{
                     singularKeyNameToProcessNext = hashKeyNamesToProcessNext.get(randChoice);
                     entityExists = SlidingWindowHelper.itemExistsWithinTimeWindow("Z:" + DEDUP_PROCESSING_TARGET_KEY_NAME, singularKeyNameToProcessNext, connection, 300);
 
-                    System.out.println("Hmmm...  entityExists == " + entityExists + " keyname == " + singularKeyNameToProcessNext);
+                    logger.fine("Hmmm...  entityExists == " + entityExists + " keyname == " + singularKeyNameToProcessNext);
                 }
                 retryCount--;
             }
@@ -140,11 +148,11 @@ public class FairTopicEntryFromSearchCreatorThread extends Thread{
 
                         //TimeSeriesEventLogger uses JedisPooledHelper to init JedisPooled connection when created:
                         //To make logger more robust you can assign startUpArgs to the instance (not done in this example)
-                        TimeSeriesEventLogger logger = new TimeSeriesEventLogger().setSharedLabel("fair_events").
+                        TimeSeriesEventLogger tsLogger = new TimeSeriesEventLogger().setSharedLabel("fair_events").
                                 setCustomLabel(fairSingerName).
                                 setTSKeyNameForMyLog("TS:" + fairSingerName).
                                 initTS();
-                        logger.addEventToMyTSKey(1.0d);
+                        tsLogger.addEventToMyTSKey(1.0d);
                     }catch(java.lang.NumberFormatException nfe){}
                 }
             }

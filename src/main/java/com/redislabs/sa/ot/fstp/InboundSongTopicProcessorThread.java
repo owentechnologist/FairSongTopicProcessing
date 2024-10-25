@@ -1,7 +1,7 @@
 package com.redislabs.sa.ot.fstp;
 
 import redis.clients.jedis.*;
-
+import java.util.logging.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -29,6 +29,7 @@ public class InboundSongTopicProcessorThread extends Thread{
     String DEDUP_INBOUND_TOPIC_KEY_NAME=null;
     static volatile int consumerIDSCounterForThreads=0;
     int consumerIDSuffixForThread=0;
+    static Logger logger = Logger.getLogger("com.redislabs.sa.ot.fstp.InboundSongTopicProcessorThread");
 
     public InboundSongTopicProcessorThread setInboundEntryDedupKeyName(String name){
         this.DEDUP_INBOUND_TOPIC_KEY_NAME=name;
@@ -54,7 +55,7 @@ public class InboundSongTopicProcessorThread extends Thread{
         try{
             consumerIDSCounterForThreads++;
             this.consumerIDSuffixForThread=consumerIDSCounterForThreads;
-            System.out.println("InboundSongTopicProcessorThread Started...");
+            logger.fine("InboundSongTopicProcessorThread Started...");
             long lag = 1;
             while(lag>0){
                 //try to consume 10 events before checking lag
@@ -82,7 +83,7 @@ public class InboundSongTopicProcessorThread extends Thread{
         ConsumerGroup consumer = new ConsumerGroup(connection, INBOUND_TOPIC_NAME, consumerGroupName);
         //for (int x = 0; x < numberOfEntriesToConsume; x++) {
             TopicEntry consumedMessage = consumer.consume("songEventFairProcessor:"+consumerIDSuffixForThread);
-            System.out.println("FairSongProcessingTopicThread.convertInboundToFair() DEBUG: Topic gave me: "+consumedMessage);
+            logger.fine("FairSongProcessingTopicThread.convertInboundToFair() DEBUG: Topic gave me: "+consumedMessage);
             if(!(null==consumedMessage)) {
                 consumedMessage.getMessage().forEach(
                 (key, value) -> System.out.println(key + ":" + value)
@@ -104,7 +105,7 @@ public class InboundSongTopicProcessorThread extends Thread{
                     //FairTopic by other Threads
                     Thread.sleep(10);
                 }
-                System.out.println("isDuplicate ==" + isDuplicate);
+                logger.fine("isDuplicate ==" + isDuplicate);
                 //If not duplicate then isDuplicate == false:
                 if (!isDuplicate) {
                     //write the message attributes to a Hash to be indexed by Search
@@ -136,7 +137,7 @@ public class InboundSongTopicProcessorThread extends Thread{
                     // To acknowledge a message, create an AckMessage:
                     AckMessage ack = new AckMessage(consumedMessage);
                     boolean success = consumer.acknowledge(ack);
-                    System.out.println("Inbound song to be processed Message Acknowledged... " + ack);
+                    logger.fine("Inbound song to be processed Message Acknowledged... " + ack);
                 }
             }catch(Throwable ttt){ttt.printStackTrace();}
         //}//end of convertTargetCount loop
